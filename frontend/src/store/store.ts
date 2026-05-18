@@ -248,12 +248,15 @@ export const useStore = () => {
         c.entries = c.entries.filter((e) => e.id !== entryId);
       }),
     // reparto
-    addRepartoDay: (date: string) =>
-      update((d) => {
-        if (!d.repartos.find((r) => r.date === date)) {
-          d.repartos.push({ id: uid(), date, items: [] });
-        }
-      }),
+    addRepartoDay: async (date: string): Promise<string> => {
+      let existing = inMemory.repartos.find((r) => r.date === date);
+      if (existing) return existing.id;
+      const id = uid();
+      await update((d) => {
+        d.repartos.push({ id, date, items: [] });
+      });
+      return id;
+    },
     deleteRepartoDay: (id: string) =>
       update((d) => {
         d.repartos = d.repartos.filter((r) => r.id !== id);

@@ -1061,19 +1061,11 @@ export default function App() {
           <RepartoList
             data={store.data}
             onSelect={setSelectedReparto}
-            onAdd={() => {
+            onAdd={async () => {
               const t = utils.today();
-              const existing = store.data.repartos.find((r) => r.date === t);
-              if (existing) {
-                setSelectedReparto(existing);
-              } else {
-                store.addRepartoDay(t);
-                // wait microtask for state update
-                setTimeout(() => {
-                  const fresh = store.data.repartos.find((r) => r.date === t);
-                  if (fresh) setSelectedReparto(fresh);
-                }, 50);
-              }
+              const id = await store.addRepartoDay(t);
+              const fresh = store.data.repartos.find((r) => r.id === id);
+              if (fresh) setSelectedReparto(fresh);
             }}
           />
         )}
