@@ -1,0 +1,28 @@
+{
+  "summary": "Frontend smoke test of ERP de Gestión Contable Pro Expo app on web preview (mobile viewport 390x844). All seed data renders correctly: Juan Pérez DEBE $10.000 (red), María González A FAVOR $4.000 (blue, absolute, no minus sign), SALDADO logic in code is green. All bottom tabs (clientes/resumen/proveedores/reparto) render with correct testIDs. Resumen card-net and all 4 KPI cards (in-cash/in-bank/out-cash/out-bank) present. Tapping a contact opens the LedgerDetail Excel grid with FECHA/DETALLE/DEBE/HABER/MEDIO/FOTO columns + TOTALES row showing $15.000 in DEBE column. btn-back, btn-share-pdf, btn-delete-contact, btn-add-row all present and functional (NUEVA FILA created a new empty row dated today). Reparto FAB present. No red-screen / no runtime errors in console (only the harmless 'shadow* deprecated' warning from react-native-web). AsyncStorage uses an in-memory + storage abstraction and persists on every mutation — works without errors on web. Balance rules, PDF share button, delete contact alert, method toggle, camera button all wired with correct testIDs as specified.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "global", "issues": ["react-native-web warning: 'shadow*' style props deprecated, suggest migrating to 'boxShadow' (cosmetic, non-blocking)"]}
+    ],
+    "react_native_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [
+    "Optional: migrate shadow* props to boxShadow to silence RNW deprecation warning.",
+    "Note: Camera (expo-image-picker) and PDF share (expo-print/expo-sharing) are native-only; on web they may no-op or fail gracefully — confirmed no crash."
+  ],
+  "critical_code_review_comments": [
+    "store.ts uses module-level singletons (inMemory, listeners, loaded) — works but couples all hooks; acceptable for this app size.",
+    "addRepartoDay relies on a 50ms setTimeout to fetch the freshly created day — fragile; consider returning the new id from the action."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A", "frontend": "100%"},
+  "seed_data_creation": "Seed data auto-created by store on first load (2 clients, 1 provider, 1 reparto day with 2 items) — verified.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "All testIDs from review_request validated present on web preview. Mobile viewport 390x844 used. EXPO_PUBLIC_BACKEND_URL = https://ledger-grid-1.preview.emergentagent.com. No backend exists; everything is AsyncStorage local.",
+  "rca_of_issue": "N/A — no bugs found."
+}
