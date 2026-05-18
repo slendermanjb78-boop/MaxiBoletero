@@ -290,6 +290,17 @@ export const useStore = () => {
         const it = r.items.find((x) => x.id === itemId);
         if (it) Object.assign(it, patch);
       }),
+    moveRepartoItem: (dayId: string, itemId: string, direction: -1 | 1) =>
+      update((d) => {
+        const r = d.repartos.find((x) => x.id === dayId);
+        if (!r) return;
+        const idx = r.items.findIndex((x) => x.id === itemId);
+        if (idx < 0) return;
+        const newIdx = idx + direction;
+        if (newIdx < 0 || newIdx >= r.items.length) return;
+        const [moved] = r.items.splice(idx, 1);
+        r.items.splice(newIdx, 0, moved);
+      }),
     deleteRepartoItem: (dayId: string, itemId: string) =>
       update((d) => {
         const r = d.repartos.find((x) => x.id === dayId);

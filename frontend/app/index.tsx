@@ -19,43 +19,32 @@ import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context"
 import { MaterialCommunityIcons, Feather } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 
-import { useStore, Contact, LedgerEntry, Method, RepartoDay, utils } from "@/src/store/store";
+import { useStore, Contact, RepartoDay, utils, AppData } from "@/src/store/store";
 import { computeBalance, formatCurrency, formatDateDMY, computeWeekly } from "@/src/utils/calc";
 import { exportAndShareContact } from "@/src/utils/pdf";
 import { exportBackup, pickAndParseBackup } from "@/src/utils/backup";
+import { useTheme, ThemeColors } from "@/src/theme/theme";
 
-type Tab = "clientes" | "resumen" | "proveedores" | "reparto";
+type Tab = "clientes" | "resumen" | "proveedores" | "reparto" | "ajustes";
 type Kind = "clients" | "providers";
-
-const C = {
-  bg: "#f8fafc",
-  card: "#ffffff",
-  ink: "#0f172a",
-  text: "#334155",
-  muted: "#64748b",
-  border: "#e2e8f0",
-  borderLight: "#f1f5f9",
-  blue: "#2563eb",
-  blueLight: "#dbeafe",
-  red: "#dc2626",
-  redLight: "#fee2e2",
-  green: "#16a34a",
-  greenLight: "#dcfce7",
-  yellow: "#facc15",
-  yellowLight: "#fef9c3",
-  amber: "#92400e",
-  blueInk: "#1e3a8a",
-};
 
 const MONO = Platform.select({ ios: "Menlo", android: "monospace", default: "monospace" }) as string;
 
+const useUI = () => {
+  const { colors: C, mode, toggle } = useTheme();
+  const s = useMemo(() => makeStyles(C), [C]);
+  return { C, s, mode, toggle };
+};
+
 // ---------- Bottom Tabs ----------
 function BottomTabs({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
-  const items: { key: Tab; label: string; icon: any; lib: "mci" | "feather" }[] = [
-    { key: "clientes", label: "CLIENTES", icon: "account", lib: "mci" },
-    { key: "resumen", label: "RESUMEN", icon: "chart-bar", lib: "mci" },
-    { key: "proveedores", label: "PROVEEDORES", icon: "truck", lib: "mci" },
-    { key: "reparto", label: "REPARTO", icon: "map-marker-radius", lib: "mci" },
+  const { C, s } = useUI();
+  const items: { key: Tab; label: string; icon: any }[] = [
+    { key: "clientes", label: "CLIENTES", icon: "account" },
+    { key: "resumen", label: "RESUMEN", icon: "chart-bar" },
+    { key: "proveedores", label: "PROVEED.", icon: "truck" },
+    { key: "reparto", label: "REPARTO", icon: "map-marker-radius" },
+    { key: "ajustes", label: "AJUSTES", icon: "cog" },
   ];
   return (
     <View style={s.bottomTabs} testID="bottom-tabs">
@@ -72,9 +61,9 @@ function BottomTabs({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
             <MaterialCommunityIcons
               name={it.icon}
               size={22}
-              color={active ? C.blue : "#94a3b8"}
+              color={active ? C.blue : C.muted}
             />
-            <Text style={[s.tabLabel, { color: active ? C.blue : "#94a3b8" }]}>
+            <Text style={[s.tabLabel, { color: active ? C.blue : C.muted }]}>
               {it.label}
             </Text>
           </TouchableOpacity>
@@ -100,6 +89,7 @@ function ContactList({
   title: string;
   subtitle: string;
 }) {
+  const { C, s } = useUI();
   const [adding, setAdding] = useState(false);
   const [name, setName] = useState("");
 
@@ -223,6 +213,7 @@ function LedgerDetail({
   contact: Contact;
   onBack: () => void;
 }) {
+  const { C, s } = useUI();
   const store = useStore();
   const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [datePickerFor, setDatePickerFor] = useState<string | null>(null);
@@ -386,7 +377,7 @@ function LedgerDetail({
                   <TextInput
                     style={s.cellInput}
                     placeholder="Concepto..."
-                    placeholderTextColor="#cbd5e1"
+                    placeholderTextColor={C.muted}
                     value={e.description}
                     onChangeText={(t) =>
                       store.updateEntry(kind, liveContact.id, e.id, { description: t })
@@ -399,7 +390,7 @@ function LedgerDetail({
                   <TextInput
                     style={[s.cellInputNum]}
                     placeholder="0"
-                    placeholderTextColor="#cbd5e1"
+                    placeholderTextColor={C.muted}
                     keyboardType="numeric"
                     value={e.debe ? String(e.debe) : ""}
                     onChangeText={(t) =>
@@ -415,7 +406,7 @@ function LedgerDetail({
                   <TextInput
                     style={[s.cellInputNum]}
                     placeholder="0"
-                    placeholderTextColor="#cbd5e1"
+                    placeholderTextColor={C.muted}
                     keyboardType="numeric"
                     value={e.haber ? String(e.haber) : ""}
                     onChangeText={(t) =>
@@ -614,13 +605,11 @@ function LedgerDetail({
 // ---------- Resumen ----------
 function ResumenView({
   data,
-  onRestored,
 }: {
   data: ReturnType<typeof useStore>["data"];
-  onRestored: (next: ReturnType<typeof useStore>["data"]) => void;
 }) {
+  const { C, s } = useUI();
   const w = useMemo(() => computeWeekly(data.clients, data.providers), [data]);
-  const [busy, setBusy] = useState<"export" | "import" | null>(null);
   const monday = useMemo(() => {
     const m = new Date();
     const dow = m.getDay();
@@ -628,67 +617,6 @@ function ResumenView({
     m.setDate(m.getDate() - diff);
     return m;
   }, []);
-
-  const doExport = (includePhotos: boolean) => {
-    Alert.alert(
-      "Exportar respaldo",
-      includePhotos
-        ? "Se incluirán las fotos de evidencia (archivo más grande)."
-        : "Solo datos contables, sin fotos. Archivo ligero, ideal para compartir.",
-      [
-        { text: "Cancelar", style: "cancel" },
-        {
-          text: "Exportar",
-          onPress: async () => {
-            try {
-              setBusy("export");
-              await exportBackup(data, includePhotos);
-            } catch (e: any) {
-              Alert.alert("Error", e?.message || "No se pudo exportar");
-            } finally {
-              setBusy(null);
-            }
-          },
-        },
-      ],
-    );
-  };
-
-  const doImport = async () => {
-    try {
-      setBusy("import");
-      const parsed = await pickAndParseBackup();
-      if (!parsed) {
-        setBusy(null);
-        return;
-      }
-      const stats = {
-        c: parsed.data.clients.length,
-        p: parsed.data.providers.length,
-        r: parsed.data.repartos.length,
-        date: new Date(parsed.exportedAt).toLocaleString("es-AR"),
-      };
-      Alert.alert(
-        "Confirmar restauración",
-        `Respaldo del ${stats.date}\n\n• ${stats.c} clientes\n• ${stats.p} proveedores\n• ${stats.r} días de reparto\n\nSe REEMPLAZARÁN todos los datos actuales. ¿Continuar?`,
-        [
-          { text: "Cancelar", style: "cancel", onPress: () => setBusy(null) },
-          {
-            text: "Restaurar",
-            style: "destructive",
-            onPress: async () => {
-              await onRestored(parsed.data);
-              setBusy(null);
-              Alert.alert("Listo", "Datos restaurados correctamente.");
-            },
-          },
-        ],
-      );
-    } catch (e: any) {
-      setBusy(null);
-      Alert.alert("Error", e?.message || "No se pudo importar el archivo");
-    }
-  };
 
   return (
     <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 140 }}>
@@ -750,7 +678,7 @@ function ResumenView({
         />
         <KpiCard
           icon="bank-transfer-out"
-          tint="#fef3c7"
+          tint={C.yellowLight}
           color={C.amber}
           label="TRANSFERENCIA"
           sub="Pagos por banco"
@@ -774,7 +702,157 @@ function ResumenView({
           <Text style={s.statRowVal}>{data.repartos.length}</Text>
         </View>
       </View>
+    </ScrollView>
+  );
+}
 
+// ---------- Settings ----------
+function SettingsView({
+  data,
+  onRestored,
+}: {
+  data: AppData;
+  onRestored: (next: AppData) => void;
+}) {
+  const { C, s, mode, toggle } = useUI();
+  const [busy, setBusy] = useState<"export" | "import" | null>(null);
+
+  const confirmAsync = (
+    title: string,
+    message: string,
+    confirmLabel: string,
+    destructive = false,
+  ): Promise<boolean> =>
+    new Promise((resolve) => {
+      if (Platform.OS === "web") {
+        // eslint-disable-next-line no-alert
+        resolve(window.confirm(`${title}\n\n${message}`));
+        return;
+      }
+      Alert.alert(title, message, [
+        { text: "Cancelar", style: "cancel", onPress: () => resolve(false) },
+        {
+          text: confirmLabel,
+          style: destructive ? "destructive" : "default",
+          onPress: () => resolve(true),
+        },
+      ]);
+    });
+
+  const doExport = async (includePhotos: boolean) => {
+    const ok = await confirmAsync(
+      "Exportar respaldo",
+      includePhotos
+        ? "Se incluirán las fotos de evidencia (archivo más grande)."
+        : "Solo datos contables, sin fotos. Archivo ligero, ideal para compartir.",
+      "Exportar",
+    );
+    if (!ok) return;
+    try {
+      setBusy("export");
+      await exportBackup(data, includePhotos);
+    } catch (e: any) {
+      const msg = e?.message || "No se pudo exportar";
+      if (Platform.OS === "web") window.alert(msg);
+      else Alert.alert("Error", msg);
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const doImport = async () => {
+    try {
+      setBusy("import");
+      const parsed = await pickAndParseBackup();
+      if (!parsed) {
+        setBusy(null);
+        return;
+      }
+      const stats = {
+        c: parsed.data.clients.length,
+        p: parsed.data.providers.length,
+        r: parsed.data.repartos.length,
+        date: new Date(parsed.exportedAt).toLocaleString("es-AR"),
+      };
+      const ok = await confirmAsync(
+        "Confirmar restauración",
+        `Respaldo del ${stats.date}\n\n• ${stats.c} clientes\n• ${stats.p} proveedores\n• ${stats.r} días de reparto\n\nSe REEMPLAZARÁN todos los datos actuales. ¿Continuar?`,
+        "Restaurar",
+        true,
+      );
+      if (!ok) {
+        setBusy(null);
+        return;
+      }
+      await onRestored(parsed.data);
+      setBusy(null);
+      if (Platform.OS === "web") window.alert("Datos restaurados correctamente.");
+      else Alert.alert("Listo", "Datos restaurados correctamente.");
+    } catch (e: any) {
+      setBusy(null);
+      const msg = e?.message || "No se pudo importar el archivo";
+      if (Platform.OS === "web") window.alert(msg);
+      else Alert.alert("Error", msg);
+    }
+  };
+
+  const isDark = mode === "dark";
+
+  return (
+    <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 140 }}>
+      <View style={s.screenHeader}>
+        <Text style={s.screenTitle}>Ajustes</Text>
+        <Text style={s.screenSubtitle}>Preferencias y respaldo de datos</Text>
+      </View>
+
+      {/* Theme */}
+      <View style={s.statBlock}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 4 }}>
+          <MaterialCommunityIcons
+            name={isDark ? "moon-waning-crescent" : "white-balance-sunny"}
+            size={18}
+            color={C.ink}
+          />
+          <Text style={s.statTitle}>Apariencia</Text>
+        </View>
+        <Text style={{ color: C.muted, fontSize: 12, marginBottom: 14 }}>
+          Cambia el tema entre claro y oscuro. Tu elección se guarda automáticamente.
+        </Text>
+
+        <TouchableOpacity
+          style={[s.backupBtn, { marginBottom: 0 }]}
+          onPress={toggle}
+          testID="btn-toggle-theme"
+          activeOpacity={0.85}
+        >
+          <View style={[s.backupIcon, { backgroundColor: isDark ? "#1e293b" : "#fef3c7" }]}>
+            <MaterialCommunityIcons
+              name={isDark ? "moon-waning-crescent" : "white-balance-sunny"}
+              size={20}
+              color={isDark ? C.blue : C.amber}
+            />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={s.backupTitle}>Tema {isDark ? "Oscuro" : "Claro"}</Text>
+            <Text style={s.backupSub}>
+              Toca para cambiar a tema {isDark ? "claro" : "oscuro"}
+            </Text>
+          </View>
+          <View style={[s.themeToggle, { backgroundColor: isDark ? C.blue : C.border }]}>
+            <View
+              style={[
+                s.themeToggleKnob,
+                {
+                  backgroundColor: "#fff",
+                  transform: [{ translateX: isDark ? 22 : 2 }],
+                },
+              ]}
+            />
+          </View>
+        </TouchableOpacity>
+      </View>
+
+      {/* Backup */}
       <View style={s.statBlock}>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 4 }}>
           <MaterialCommunityIcons name="cloud-download-outline" size={18} color={C.ink} />
@@ -811,7 +889,7 @@ function ResumenView({
           testID="btn-export-full"
           activeOpacity={0.85}
         >
-          <View style={[s.backupIcon, { backgroundColor: "#fef3c7" }]}>
+          <View style={[s.backupIcon, { backgroundColor: C.yellowLight }]}>
             <Feather name="archive" size={18} color={C.amber} />
           </View>
           <View style={{ flex: 1 }}>
@@ -840,6 +918,10 @@ function ResumenView({
           )}
         </TouchableOpacity>
       </View>
+
+      <Text style={{ color: C.muted, fontSize: 11, textAlign: "center", marginTop: 12 }}>
+        Gestión Contable Pro · v1.0
+      </Text>
     </ScrollView>
   );
 }
@@ -861,6 +943,7 @@ function KpiCard({
   amount: number;
   testID?: string;
 }) {
+  const { s } = useUI();
   return (
     <View style={s.kpiCard} testID={testID}>
       <View style={[s.kpiIcon, { backgroundColor: tint }]}>
@@ -883,6 +966,7 @@ function RepartoList({
   onSelect: (d: RepartoDay) => void;
   onAdd: () => void;
 }) {
+  const { C, s } = useUI();
   const sorted = [...data.repartos].sort((a, b) => b.date.localeCompare(a.date));
   return (
     <View style={{ flex: 1 }}>
@@ -959,6 +1043,7 @@ function RepartoDetail({
   day: RepartoDay;
   onBack: () => void;
 }) {
+  const { C, s } = useUI();
   const store = useStore();
   const live = store.data.repartos.find((d) => d.id === day.id) || day;
   const total = live.items.length;
@@ -1003,6 +1088,9 @@ function RepartoDetail({
         <ScrollView horizontal>
           <View>
             <View style={[s.gridRow, s.gridHead]}>
+              <View style={[s.rcellOrder, s.headCell]}>
+                <Text style={s.headText}>#</Text>
+              </View>
               <View style={[s.rcellName, s.headCell]}>
                 <Text style={s.headText}>CLIENTE</Text>
               </View>
@@ -1016,13 +1104,32 @@ function RepartoDetail({
                 <Text style={s.headText}>ESTADO</Text>
               </View>
             </View>
-            {live.items.map((it) => (
+            {live.items.map((it, idx) => (
               <View key={it.id} style={s.gridRow}>
+                <View style={[s.rcellOrder, s.bodyCell, { alignItems: "center", flexDirection: "column", gap: 2 }]}>
+                  <TouchableOpacity
+                    onPress={() => store.moveRepartoItem(live.id, it.id, -1)}
+                    disabled={idx === 0}
+                    style={[s.orderBtn, { opacity: idx === 0 ? 0.25 : 1 }]}
+                    testID={`reparto-up-${it.id}`}
+                  >
+                    <Feather name="chevron-up" size={14} color={C.ink} />
+                  </TouchableOpacity>
+                  <Text style={s.orderNum}>{idx + 1}</Text>
+                  <TouchableOpacity
+                    onPress={() => store.moveRepartoItem(live.id, it.id, 1)}
+                    disabled={idx === live.items.length - 1}
+                    style={[s.orderBtn, { opacity: idx === live.items.length - 1 ? 0.25 : 1 }]}
+                    testID={`reparto-down-${it.id}`}
+                  >
+                    <Feather name="chevron-down" size={14} color={C.ink} />
+                  </TouchableOpacity>
+                </View>
                 <View style={[s.rcellName, s.bodyCell]}>
                   <TextInput
                     style={s.cellInput}
                     placeholder="Nombre"
-                    placeholderTextColor="#cbd5e1"
+                    placeholderTextColor={C.muted}
                     value={it.clientName}
                     onChangeText={(t) =>
                       store.updateRepartoItem(live.id, it.id, { clientName: t })
@@ -1034,7 +1141,7 @@ function RepartoDetail({
                   <TextInput
                     style={s.cellInput}
                     placeholder="Detalle producto"
-                    placeholderTextColor="#cbd5e1"
+                    placeholderTextColor={C.muted}
                     value={it.productDetail}
                     onChangeText={(t) =>
                       store.updateRepartoItem(live.id, it.id, { productDetail: t })
@@ -1045,7 +1152,7 @@ function RepartoDetail({
                   <TextInput
                     style={s.cellInputNum}
                     placeholder="0"
-                    placeholderTextColor="#cbd5e1"
+                    placeholderTextColor={C.muted}
                     keyboardType="numeric"
                     value={it.quantity}
                     onChangeText={(t) =>
@@ -1115,6 +1222,7 @@ function RepartoDetail({
 
 // ---------- Root ----------
 export default function App() {
+  const { C, s, mode } = useUI();
   const store = useStore();
   const [tab, setTab] = useState<Tab>("clientes");
   const [selectedClient, setSelectedClient] = useState<Contact | null>(null);
@@ -1169,7 +1277,7 @@ export default function App() {
 
   return (
     <SafeAreaView style={s.root} edges={["top"]}>
-      <StatusBar barStyle="dark-content" backgroundColor={C.bg} />
+      <StatusBar barStyle={mode === "dark" ? "light-content" : "dark-content"} backgroundColor={C.bg} />
       <View style={{ flex: 1 }}>
         {tab === "clientes" && (
           <ContactList
@@ -1181,12 +1289,7 @@ export default function App() {
             subtitle="Quienes me deben"
           />
         )}
-        {tab === "resumen" && (
-          <ResumenView
-            data={store.data}
-            onRestored={(next) => store.replaceAll(next)}
-          />
-        )}
+        {tab === "resumen" && <ResumenView data={store.data} />}
         {tab === "proveedores" && (
           <ContactList
             kind="providers"
@@ -1209,8 +1312,14 @@ export default function App() {
             }}
           />
         )}
+        {tab === "ajustes" && (
+          <SettingsView
+            data={store.data}
+            onRestored={(next) => store.replaceAll(next)}
+          />
+        )}
       </View>
-      <View style={{ paddingBottom: insets.bottom, backgroundColor: "#fff" }}>
+      <View style={{ paddingBottom: insets.bottom, backgroundColor: C.tabBg }}>
         <BottomTabs tab={tab} setTab={setTab} />
       </View>
     </SafeAreaView>
@@ -1218,7 +1327,7 @@ export default function App() {
 }
 
 // ---------- Styles ----------
-const s = StyleSheet.create({
+const makeStyles = (C: ThemeColors) => StyleSheet.create({
   root: { flex: 1, backgroundColor: C.bg },
 
   // Screen header
@@ -1269,7 +1378,7 @@ const s = StyleSheet.create({
   // Empty
   empty: { alignItems: "center", paddingVertical: 60 },
   emptyText: { color: C.muted, fontWeight: "600", marginTop: 12 },
-  emptySub: { color: "#94a3b8", fontSize: 12, marginTop: 4 },
+  emptySub: { color: C.muted, fontSize: 12, marginTop: 4 },
 
   // FAB
   fab: {
@@ -1292,11 +1401,11 @@ const s = StyleSheet.create({
   // Modal
   modalBackdrop: {
     flex: 1,
-    backgroundColor: "rgba(15,23,42,0.65)",
+    backgroundColor: "rgba(15,23,42,0.75)",
     justifyContent: "center",
     paddingHorizontal: 24,
   },
-  modalCard: { backgroundColor: "#fff", borderRadius: 24, padding: 22 },
+  modalCard: { backgroundColor: C.card, borderRadius: 24, padding: 22 },
   modalTitle: { fontSize: 20, fontWeight: "800", color: C.ink, marginBottom: 12 },
   input: {
     borderWidth: 1,
@@ -1306,6 +1415,7 @@ const s = StyleSheet.create({
     paddingVertical: 14,
     fontSize: 16,
     color: C.ink,
+    backgroundColor: C.card,
   },
   btnPrimary: {
     backgroundColor: C.blue,
@@ -1315,7 +1425,7 @@ const s = StyleSheet.create({
   },
   btnPrimaryText: { color: "#fff", fontWeight: "800", letterSpacing: 0.5 },
   btnGhost: {
-    backgroundColor: "#f1f5f9",
+    backgroundColor: C.borderLight,
     paddingVertical: 14,
     borderRadius: 14,
     alignItems: "center",
@@ -1325,7 +1435,7 @@ const s = StyleSheet.create({
   // Bottom tabs
   bottomTabs: {
     flexDirection: "row",
-    backgroundColor: "#fff",
+    backgroundColor: C.tabBg,
     borderTopWidth: 1,
     borderTopColor: C.borderLight,
     paddingVertical: 8,
@@ -1333,9 +1443,9 @@ const s = StyleSheet.create({
   tabBtn: { flex: 1, alignItems: "center", paddingVertical: 6 },
   tabLabel: { fontSize: 9, fontWeight: "800", marginTop: 4, letterSpacing: 1 },
 
-  // Detail header
+  // Detail header (always-dark)
   detailHeader: {
-    backgroundColor: C.ink,
+    backgroundColor: C.dark,
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: 8,
@@ -1358,8 +1468,8 @@ const s = StyleSheet.create({
   detailHeaderSub: { fontSize: 12, fontWeight: "800", marginTop: 2, letterSpacing: 1 },
 
   // Grid
-  gridRow: { flexDirection: "row", backgroundColor: "#fff" },
-  gridHead: { backgroundColor: C.ink },
+  gridRow: { flexDirection: "row", backgroundColor: C.card },
+  gridHead: { backgroundColor: C.dark },
   headCell: { paddingHorizontal: 10, paddingVertical: 12, justifyContent: "center" },
   headText: {
     color: "#fff",
@@ -1407,7 +1517,7 @@ const s = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  totalsRow: { backgroundColor: "#f8fafc" },
+  totalsRow: { backgroundColor: C.rowAlt },
   totalsLabel: { fontSize: 11, fontWeight: "800", color: C.muted, letterSpacing: 1.5 },
   totalsNum: { fontFamily: MONO, fontWeight: "800", fontSize: 14 },
 
@@ -1417,21 +1527,21 @@ const s = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     paddingVertical: 18,
-    backgroundColor: "#fff",
+    backgroundColor: C.card,
     borderBottomWidth: 1,
     borderBottomColor: C.borderLight,
   },
   addRowText: { color: C.blue, fontWeight: "800", letterSpacing: 1.5 },
 
   detailFooter: {
-    backgroundColor: C.ink,
+    backgroundColor: C.dark,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: 18,
     paddingVertical: 14,
   },
-  footerLabel: { color: "#94a3b8", fontSize: 10, fontWeight: "700", letterSpacing: 1.5 },
+  footerLabel: { color: C.darkMuted, fontSize: 10, fontWeight: "700", letterSpacing: 1.5 },
   footerAmount: { fontFamily: MONO, fontWeight: "800", fontSize: 18, marginTop: 4 },
   footerBtn: {
     backgroundColor: C.blue,
@@ -1443,13 +1553,13 @@ const s = StyleSheet.create({
 
   // Resumen
   summaryCard: {
-    backgroundColor: C.ink,
+    backgroundColor: C.dark,
     borderRadius: 28,
     padding: 22,
     marginBottom: 16,
   },
   summaryLabel: {
-    color: "#94a3b8",
+    color: C.darkMuted,
     fontSize: 11,
     fontWeight: "700",
     letterSpacing: 2,
@@ -1461,7 +1571,7 @@ const s = StyleSheet.create({
     fontFamily: MONO,
     marginTop: 8,
   },
-  divider: { height: 1, backgroundColor: "#1e293b", marginVertical: 12 },
+  divider: { height: 1, backgroundColor: C.darkBorder, marginVertical: 12 },
   row: { flexDirection: "row", justifyContent: "space-between", paddingVertical: 6 },
   summaryRowLabel: { color: "#cbd5e1", fontSize: 13 },
   summaryRowVal: { fontFamily: MONO, fontWeight: "700", fontSize: 14 },
@@ -1470,7 +1580,7 @@ const s = StyleSheet.create({
   kpiCard: {
     width: "47%",
     flexGrow: 1,
-    backgroundColor: "#fff",
+    backgroundColor: C.card,
     borderRadius: 20,
     padding: 14,
     borderWidth: 1,
@@ -1489,7 +1599,7 @@ const s = StyleSheet.create({
   kpiAmount: { fontFamily: MONO, fontSize: 18, fontWeight: "800", marginTop: 8 },
 
   statBlock: {
-    backgroundColor: "#fff",
+    backgroundColor: C.card,
     borderRadius: 20,
     padding: 18,
     marginTop: 14,
@@ -1504,7 +1614,7 @@ const s = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
-    backgroundColor: "#f8fafc",
+    backgroundColor: C.bg,
     borderRadius: 14,
     padding: 12,
     marginBottom: 10,
@@ -1521,11 +1631,39 @@ const s = StyleSheet.create({
   backupTitle: { fontWeight: "800", color: C.ink, fontSize: 14 },
   backupSub: { color: C.muted, fontSize: 11, marginTop: 2 },
 
+  themeToggle: {
+    width: 46,
+    height: 26,
+    borderRadius: 13,
+    justifyContent: "center",
+  },
+  themeToggleKnob: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    position: "absolute",
+  },
+
   // Reparto grid
+  rcellOrder: { width: 56, alignItems: "center" },
   rcellName: { width: 160 },
   rcellProd: { width: 220 },
   rcellQty: { width: 80, alignItems: "flex-end" },
   rcellStatus: { width: 150, justifyContent: "center" },
+  orderBtn: {
+    width: 22,
+    height: 18,
+    borderRadius: 6,
+    backgroundColor: C.borderLight,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  orderNum: {
+    fontFamily: MONO,
+    fontSize: 11,
+    fontWeight: "800",
+    color: C.muted,
+  },
   statusPill: {
     flexDirection: "row",
     alignItems: "center",

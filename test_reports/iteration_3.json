@@ -1,0 +1,30 @@
+{
+  "summary": "Iteration 4 features (Ajustes tab, theme toggle, reparto reorder, backup move) all verified working on mobile viewport (390x844). All 5 tabs render, theme toggle flips light<->dark with localStorage persistence (erp_theme_mode_v1='dark'), reparto reorder swaps items correctly (NAME_0 <-> NAME_1 after clicking down on first), first-up & last-down buttons properly disabled (opacity 0.25), backup export-light produces valid JSON with no data:image base64, export-full works, Resumen no longer contains backup buttons. NOTE: On initial load there was a transient 'ReferenceError: C is not defined' in ResumenView that disappeared after `supervisorctl restart expo` (stale HMR bundle). After restart, ResumenView renders cleanly with card-net + all 4 KPI cards visible.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": [
+      {"component": "global", "issue": "Console deprecation warnings: 'shadow*' style props are deprecated. Use boxShadow. Non-blocking but should migrate styles."}
+    ]
+  },
+  "test_report_links": ["/app/test_reports/iteration_3.json"],
+  "action_items": [
+    "Migrate shadow* style props to boxShadow (low priority, just warnings)",
+    "Investigate transient stale HMR bundle that caused ResumenView 'C is not defined' on fresh page-load before expo restart. Likely cache/Metro issue, not a code bug — recommend clearing .metro-cache between major refactors."
+  ],
+  "critical_code_review_comments": [
+    "useUI() hook correctly memoizes styles per theme; ThemeProvider properly wraps Stack in _layout.tsx",
+    "moveRepartoItem in store.ts uses proper bounds checking (newIdx < 0 || >= length) before splice",
+    "Theme persistence via storage.setItem(STORAGE_KEY, m) is correctly placed in both toggle() and setMode(); useEffect on mount restores saved mode",
+    "Detail screens (LedgerDetail, RepartoDetail) hardcode StatusBar barStyle='light-content' regardless of mode — acceptable since detail headers are always dark"
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (frontend-only)", "frontend": "100% (15/15 critical checks passed)"},
+  "seed_data_creation": "Used existing seed data (2 clients, 1 provider, 1 reparto day). Added 1 reparto item during reorder test (total 3 items).",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Test creds N/A (no auth). Theme localStorage key: erp_theme_mode_v1. If you see 'C is not defined' on fresh load, run `sudo supervisorctl restart expo` first.",
+  "rca_of_issue": "Transient ResumenView error pre-restart was due to stale Metro/HMR bundle reflecting old code without C destructuring; resolved by expo service restart — not reproducible in current state."
+}
