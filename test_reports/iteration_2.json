@@ -1,0 +1,35 @@
+{
+  "summary": "Tested new backup/restore feature on Resumen tab. UI/testIDs are correct and the section renders perfectly (cards visible: Exportar Ligero, Exportar Completo, Importar respaldo). Existing tabs (clientes/proveedores/reparto/resumen) all navigate fine and KPIs render. However the export flow is BROKEN ON WEB: tapping btn-export-light / btn-export-full does NOT show any Alert dialog because react-native-web does not implement Alert.alert (it is a no-op). As a result the user can never reach the confirmation step, exportBackup() is never invoked, and no JSON file is downloaded on web. The buttons themselves do not crash the app; they simply do nothing.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "ResumenView - export buttons", "issue": "Tapping btn-export-light or btn-export-full does nothing on web. Alert.alert() is a no-op in react-native-web, so the 'Exportar respaldo' confirmation dialog never renders and the onPress confirm callback (which calls exportBackup) never fires. No download is triggered. Verified by checking document.body.innerText after tap: neither 'Exportar respaldo' nor 'Cancelar' appear in DOM, and only 2 'Exportar' texts exist (the two card labels), no Alert buttons. No browser download event was captured.", "testID": "btn-export-light / btn-export-full", "priority": "CRITICAL"},
+      {"component": "ResumenView - import button", "issue": "Same Alert.alert no-op issue affects the post-pick confirmation step of import on web (after a file is picked, the 'Confirmar restauración' dialog will not appear and replaceAll will never run). The button itself does not crash.", "testID": "btn-import-backup", "priority": "HIGH"}
+    ],
+    "integration_issues": [
+      {"flow": "Export backup (web)", "issue": "Alert.alert confirm never appears -> exportBackup() never called -> no Blob/a.download executed. Web download flow effectively broken.", "affected_testIDs": ["btn-export-light", "btn-export-full"]}
+    ],
+    "design_issues": [],
+    "react_native_issues": [
+      {"component": "Alert (react-native-web)", "issue": "Alert.alert is unsupported on react-native-web. All flows that gate logic behind an Alert button (export confirm, import confirm, delete contact, delete reparto, date picker fallback errors) will silently fail on web."}
+    ]
+  },
+  "test_report_links": ["/app/test_reports/iteration_2.json"],
+  "action_items": [
+    "Replace Alert.alert in ResumenView export/import flows with a Platform-aware confirmation. On web use window.confirm() OR a custom RN <Modal> with testIDs (e.g., btn-confirm-export). The custom Modal approach is preferred for testability and consistency with the existing modals already in index.tsx.",
+    "Consider doing the same for other Alert.alert usages (delete contact, delete reparto, photo permissions) so the web preview is fully functional.",
+    "After fix, verify on web: tapping btn-export-light shows a confirm dialog with a testID-tagged confirm button, clicking it triggers a browser download of gestion-contable-YYYY-MM-DD.json containing {app:'gestion-contable-pro', version:1, exportedAt, data:{clients,providers,repartos}} and no 'data:image' base64 strings."
+  ],
+  "critical_code_review_comments": [
+    "/app/frontend/app/index.tsx ResumenView.doExport and doImport rely on Alert.alert button callbacks which never fire on web. Wrap with Platform.OS==='web' ? window.confirm(...) : Alert.alert(...) or use a shared RN Modal component.",
+    "backup.ts is well structured and correct: stripPhotos removes photo base64, web branch uses Blob + a.download, native branch uses FileSystem + Sharing. Logic itself is fine; the only blocker is the gating Alert on web.",
+    "store.ts replaceAll action is implemented correctly and persists via update()."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (frontend-only test)", "frontend": "70% (UI renders & navigation OK; export/import gated by Alert on web is broken)"},
+  "seed_data_creation": "No seed data created; used the default seeded data already loaded by the store.",
+  "retest_needed": true,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Once main agent replaces Alert.alert with a web-compatible confirmation (window.confirm or RN Modal with testIDs like btn-confirm-export-light/btn-confirm-export-full/btn-confirm-import), re-test by: (1) tapping btn-export-light -> confirm -> capture page.on('download') event, parse the JSON, assert app=='gestion-contable-pro', version==1, no 'data:image' substring. (2) Same for btn-export-full but assert it MAY contain photos. (3) Tap btn-import-backup and verify it does not crash and opens a file input (input[type=file] should appear in DOM on web).",
+  "rca_of_issue": "Root cause: react-native-web does not implement Alert.alert with buttons (it falls back to a no-op or simple window.alert without button callbacks). Reproduction: open https://ledger-grid-1.preview.emergentagent.com -> Resumen tab -> scroll to 'Respaldo de datos' -> tap 'Exportar (Ligero)'. Expected: confirmation dialog 'Exportar respaldo' with Cancelar/Exportar. Actual: nothing happens, no dialog text in DOM, no download. Mitigation: use Platform.select to call window.confirm on web, or build a custom RN <Modal> dialog (preferred for testIDs)."
+}

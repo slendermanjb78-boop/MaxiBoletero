@@ -22,6 +22,7 @@ import * as ImagePicker from "expo-image-picker";
 import { useStore, Contact, LedgerEntry, Method, RepartoDay, utils } from "@/src/store/store";
 import { computeBalance, formatCurrency, formatDateDMY, computeWeekly } from "@/src/utils/calc";
 import { exportAndShareContact } from "@/src/utils/pdf";
+import { exportBackup, pickAndParseBackup } from "@/src/utils/backup";
 
 type Tab = "clientes" | "resumen" | "proveedores" | "reparto";
 type Kind = "clients" | "providers";
@@ -611,8 +612,15 @@ function LedgerDetail({
 }
 
 // ---------- Resumen ----------
-function ResumenView({ data }: { data: ReturnType<typeof useStore>["data"] }) {
+function ResumenView({
+  data,
+  onRestored,
+}: {
+  data: ReturnType<typeof useStore>["data"];
+  onRestored: (next: ReturnType<typeof useStore>["data"]) => void;
+}) {
   const w = useMemo(() => computeWeekly(data.clients, data.providers), [data]);
+  const [busy, setBusy] = useState<"export" | "import" | null>(null);
   const monday = useMemo(() => {
     const m = new Date();
     const dow = m.getDay();
@@ -620,6 +628,67 @@ function ResumenView({ data }: { data: ReturnType<typeof useStore>["data"] }) {
     m.setDate(m.getDate() - diff);
     return m;
   }, []);
+
+  const doExport = (includePhotos: boolean) => {
+    Alert.alert(
+      "Exportar respaldo",
+      includePhotos
+        ? "Se incluirán las fotos de evidencia (archivo más grande)."
+        : "Solo datos contables, sin fotos. Archivo ligero, ideal para compartir.",
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Exportar",
+          onPress: async () => {
+            try {
+              setBusy("export");
+              await exportBackup(data, includePhotos);
+            } catch (e: any) {
+              Alert.alert("Error", e?.message || "No se pudo exportar");
+            } finally {
+              setBusy(null);
+            }
+          },
+        },
+      ],
+    );
+  };
+
+  const doImport = async () => {
+    try {
+      setBusy("import");
+      const parsed = await pickAndParseBackup();
+      if (!parsed) {
+        setBusy(null);
+        return;
+      }
+      const stats = {
+        c: parsed.data.clients.length,
+        p: parsed.data.providers.length,
+        r: parsed.data.repartos.length,
+        date: new Date(parsed.exportedAt).toLocaleString("es-AR"),
+      };
+      Alert.alert(
+        "Confirmar restauración",
+        `Respaldo del ${stats.date}\n\n• ${stats.c} clientes\n• ${stats.p} proveedores\n• ${stats.r} días de reparto\n\nSe REEMPLAZARÁN todos los datos actuales. ¿Continuar?`,
+        [
+          { text: "Cancelar", style: "cancel", onPress: () => setBusy(null) },
+          {
+            text: "Restaurar",
+            style: "destructive",
+            onPress: async () => {
+              await onRestored(parsed.data);
+              setBusy(null);
+              Alert.alert("Listo", "Datos restaurados correctamente.");
+            },
+          },
+        ],
+      );
+    } catch (e: any) {
+      setBusy(null);
+      Alert.alert("Error", e?.message || "No se pudo importar el archivo");
+    }
+  };
 
   return (
     <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 140 }}>
@@ -704,6 +773,72 @@ function ResumenView({ data }: { data: ReturnType<typeof useStore>["data"] }) {
           <Text style={s.statRowLabel}>Días con reparto</Text>
           <Text style={s.statRowVal}>{data.repartos.length}</Text>
         </View>
+      </View>
+
+      <View style={s.statBlock}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 4 }}>
+          <MaterialCommunityIcons name="cloud-download-outline" size={18} color={C.ink} />
+          <Text style={s.statTitle}>Respaldo de datos</Text>
+        </View>
+        <Text style={{ color: C.muted, fontSize: 12, marginBottom: 14 }}>
+          Exporta un archivo JSON con toda tu información para guardarlo o
+          restaurarlo en otro dispositivo.
+        </Text>
+
+        <TouchableOpacity
+          style={s.backupBtn}
+          onPress={() => doExport(false)}
+          disabled={!!busy}
+          testID="btn-export-light"
+          activeOpacity={0.85}
+        >
+          <View style={[s.backupIcon, { backgroundColor: C.blueLight }]}>
+            <Feather name="download" size={18} color={C.blue} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={s.backupTitle}>Exportar (Ligero)</Text>
+            <Text style={s.backupSub}>Solo datos · sin fotos · fácil de compartir</Text>
+          </View>
+          {busy === "export" ? <ActivityIndicator color={C.blue} /> : (
+            <Feather name="chevron-right" size={18} color={C.muted} />
+          )}
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={s.backupBtn}
+          onPress={() => doExport(true)}
+          disabled={!!busy}
+          testID="btn-export-full"
+          activeOpacity={0.85}
+        >
+          <View style={[s.backupIcon, { backgroundColor: "#fef3c7" }]}>
+            <Feather name="archive" size={18} color={C.amber} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={s.backupTitle}>Exportar (Completo)</Text>
+            <Text style={s.backupSub}>Incluye fotos de evidencia</Text>
+          </View>
+          <Feather name="chevron-right" size={18} color={C.muted} />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[s.backupBtn, { marginBottom: 0 }]}
+          onPress={doImport}
+          disabled={!!busy}
+          testID="btn-import-backup"
+          activeOpacity={0.85}
+        >
+          <View style={[s.backupIcon, { backgroundColor: C.greenLight }]}>
+            <Feather name="upload" size={18} color={C.green} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={s.backupTitle}>Importar respaldo</Text>
+            <Text style={s.backupSub}>Restaura datos desde un archivo .json</Text>
+          </View>
+          {busy === "import" ? <ActivityIndicator color={C.green} /> : (
+            <Feather name="chevron-right" size={18} color={C.muted} />
+          )}
+        </TouchableOpacity>
       </View>
     </ScrollView>
   );
@@ -1046,7 +1181,12 @@ export default function App() {
             subtitle="Quienes me deben"
           />
         )}
-        {tab === "resumen" && <ResumenView data={store.data} />}
+        {tab === "resumen" && (
+          <ResumenView
+            data={store.data}
+            onRestored={(next) => store.replaceAll(next)}
+          />
+        )}
         {tab === "proveedores" && (
           <ContactList
             kind="providers"
@@ -1359,6 +1499,27 @@ const s = StyleSheet.create({
   statTitle: { fontSize: 13, fontWeight: "800", color: C.ink, marginBottom: 8, letterSpacing: 0.5 },
   statRowLabel: { color: C.muted, fontSize: 13 },
   statRowVal: { fontFamily: MONO, fontWeight: "800", color: C.ink, fontSize: 14 },
+
+  backupBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    backgroundColor: "#f8fafc",
+    borderRadius: 14,
+    padding: 12,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: C.borderLight,
+  },
+  backupIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  backupTitle: { fontWeight: "800", color: C.ink, fontSize: 14 },
+  backupSub: { color: C.muted, fontSize: 11, marginTop: 2 },
 
   // Reparto grid
   rcellName: { width: 160 },

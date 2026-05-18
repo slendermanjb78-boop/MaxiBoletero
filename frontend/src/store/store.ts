@@ -201,6 +201,12 @@ export const useStore = () => {
   return {
     data: inMemory,
     loaded,
+    replaceAll: (next: AppData) =>
+      update((d) => {
+        d.clients = next.clients;
+        d.providers = next.providers;
+        d.repartos = next.repartos;
+      }),
     // contacts
     addContact: (kind: "clients" | "providers", name: string) =>
       update((d) => {
