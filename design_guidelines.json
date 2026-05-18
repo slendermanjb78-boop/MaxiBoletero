@@ -1,0 +1,144 @@
+{
+  "theme": "light",
+  "archetype": "Swiss & High-Contrast",
+  "app_type": "mobile_first_spa",
+  "colors": {
+    "background": "bg-slate-50",
+    "surface": "bg-white",
+    "header": {
+      "bg": "bg-slate-900",
+      "text": "text-white"
+    },
+    "footer": {
+      "bg": "bg-slate-900",
+      "text": "text-white"
+    },
+    "primary": {
+      "bg": "bg-blue-600",
+      "text": "text-white",
+      "hover": "hover:bg-blue-700"
+    },
+    "text": {
+      "primary": "text-slate-900",
+      "secondary": "text-slate-500",
+      "inverse": "text-white"
+    },
+    "border": "border-slate-200",
+    "status": {
+      "debe": {
+        "text": "text-red-600",
+        "bg": "bg-red-50",
+        "badge": "bg-red-600 text-white"
+      },
+      "a_favor": {
+        "text": "text-blue-600",
+        "bg": "bg-blue-50",
+        "badge": "bg-blue-600 text-white"
+      },
+      "saldado": {
+        "text": "text-green-600",
+        "bg": "bg-green-50",
+        "badge": "bg-green-600 text-white"
+      }
+    },
+    "method": {
+      "efectivo": "bg-yellow-400 text-yellow-950 font-bold",
+      "transferencia": "bg-blue-400 text-blue-950 font-bold"
+    }
+  },
+  "typography": {
+    "fonts": {
+      "primary": "font-sans",
+      "numbers": "font-mono"
+    },
+    "classes": {
+      "h1": "text-2xl font-bold tracking-tight text-slate-900",
+      "h2": "text-xl font-semibold tracking-tight text-slate-900",
+      "body": "text-base text-slate-700",
+      "small": "text-sm text-slate-500",
+      "number_large": "font-mono text-xl font-bold tracking-tight",
+      "number_medium": "font-mono text-base font-semibold",
+      "number_small": "font-mono text-sm"
+    }
+  },
+  "spacing": {
+    "screen_padding": "px-4 pb-24 pt-6",
+    "card_padding": "p-5",
+    "gap_standard": "gap-4",
+    "gap_small": "gap-2"
+  },
+  "shadows": {
+    "card": "shadow-[0_8px_30px_rgb(0,0,0,0.04)]",
+    "fab": "shadow-[0_12px_36px_rgb(37,99,235,0.3)]",
+    "bottom_nav": "shadow-[0_-10px_40px_rgb(0,0,0,0.08)]"
+  },
+  "components": {
+    "bottom_tabs": {
+      "container": "fixed bottom-0 w-full bg-white border-t border-slate-100 flex justify-between items-center px-6 py-3 pb-safe z-50",
+      "tab_active": "flex flex-col items-center text-blue-600 gap-1",
+      "tab_inactive": "flex flex-col items-center text-slate-400 hover:text-slate-600 gap-1",
+      "tab_text": "text-[10px] font-semibold uppercase tracking-wider"
+    },
+    "contact_card": {
+      "container": "bg-white rounded-3xl p-4 flex items-center justify-between border border-slate-100 mb-3 active:scale-[0.98] transition-transform",
+      "avatar_wrapper": "w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center shrink-0",
+      "info_wrapper": "flex-1 px-4",
+      "name": "font-semibold text-slate-900 text-lg line-clamp-1",
+      "balance": "font-mono font-bold text-lg text-right"
+    },
+    "excel_grid": {
+      "wrapper": "bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm",
+      "scroll_container": "overflow-x-auto",
+      "table": "w-full text-sm text-left whitespace-nowrap",
+      "thead": "bg-slate-900 text-white sticky top-0 z-10",
+      "th": "px-4 py-3 font-semibold text-xs uppercase tracking-wider border-b border-slate-800",
+      "tr": "border-b border-slate-100 hover:bg-slate-50 transition-colors bg-white",
+      "td": "px-4 py-3 text-slate-700",
+      "totals_row": "bg-slate-50 border-t-2 border-slate-200 font-bold"
+    },
+    "badges": {
+      "method_pill": "px-3 py-1 rounded-full text-[10px] uppercase tracking-widest inline-flex items-center justify-center",
+      "balance_badge": "px-2 py-1 rounded text-[10px] uppercase tracking-bold font-bold"
+    },
+    "buttons": {
+      "primary": "bg-blue-600 active:bg-blue-700 text-white rounded-2xl py-4 px-6 font-bold flex items-center justify-center w-full transition-colors",
+      "fab": "fixed bottom-24 right-6 w-14 h-14 bg-blue-600 text-white rounded-full flex items-center justify-center z-40 active:scale-95 transition-transform",
+      "icon_button": "p-2 rounded-full hover:bg-slate-100 text-slate-600 active:bg-slate-200"
+    },
+    "summary_card": {
+      "container": "bg-slate-900 text-white rounded-3xl p-6 mb-6",
+      "title": "text-slate-400 text-sm font-medium uppercase tracking-wider mb-2",
+      "amount": "font-mono text-4xl font-bold text-white mb-4",
+      "breakdown_row": "flex justify-between items-center py-2 border-t border-slate-800",
+      "breakdown_label": "text-slate-300 flex items-center gap-2 text-sm",
+      "breakdown_value": "font-mono font-semibold"
+    }
+  },
+  "icons": {
+    "library": "lucide-react",
+    "mapping": {
+      "clientes": "User",
+      "resumen": "BarChart",
+      "proveedores": "Truck",
+      "reparto": "Map",
+      "camera": "Camera",
+      "eye": "Eye",
+      "share": "Share2",
+      "cash": "Banknote",
+      "bank": "CreditCard",
+      "add": "Plus",
+      "delete": "Trash2",
+      "back": "ChevronLeft"
+    }
+  },
+  "instructions_to_main_agent": [
+    "Build a mobile-first React SPA using standard React, Tailwind CSS, and Lucide React. It should look and feel like a native app.",
+    "Import Inter for general text and JetBrains Mono for all numbers (balances, dates, quantities) to achieve the requested look.",
+    "Implement the Excel Grid component with robust horizontal scrolling. The header row should be `bg-slate-900 text-white`.",
+    "The UI needs bottom tabs that are fixed to the bottom. Add extra padding (`pb-24`) to the main content area so nothing is hidden behind the tabs.",
+    "Implement absolute values for balances (no minus signs) and strictly follow the color rules: Positive balance (Debe) = Red, Negative balance (A Favor) = Blue, Zero balance (Saldado) = Green.",
+    "All interactive elements MUST include `data-testid` attributes (e.g., `data-testid=\"tab-clientes\"`, `data-testid=\"btn-add-contact\"`).",
+    "Add 'LISTO' rounded blue button in a dark footer bar for the master detail view.",
+    "Ensure input forms (add contact, add transaction) use modern mobile patterns (full screen or large bottom sheets)."
+  ]
+}
