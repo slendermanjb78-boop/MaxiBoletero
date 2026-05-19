@@ -920,7 +920,7 @@ function SettingsView({
       </View>
 
       <Text style={{ color: C.muted, fontSize: 11, textAlign: "center", marginTop: 12 }}>
-        Gestión Contable Pro · v1.0
+        MaxiBoletero · v1.0
       </Text>
     </ScrollView>
   );
