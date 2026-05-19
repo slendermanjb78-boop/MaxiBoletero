@@ -439,7 +439,7 @@ function LedgerDetail({
                     <Text
                       style={[
                         s.methodPillText,
-                        { color: e.method === "EFECTIVO" ? C.amber : C.blueInk },
+                        { color: e.method === "EFECTIVO" ? "#422006" : "#1e3a8a" },
                       ]}
                     >
                       {e.method}
@@ -1508,7 +1508,7 @@ const makeStyles = (C: ThemeColors) => StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 999,
   },
-  methodPillText: { fontSize: 10, fontWeight: "800", letterSpacing: 1.5 },
+  methodPillText: { fontSize: 11, fontWeight: "900", letterSpacing: 1 },
   photoBtn: {
     width: 30,
     height: 30,
