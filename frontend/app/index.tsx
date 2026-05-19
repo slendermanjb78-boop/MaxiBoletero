@@ -18,6 +18,7 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { MaterialCommunityIcons, Feather } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
+import * as ImageManipulator from "expo-image-manipulator";
 
 import { useStore, Contact, RepartoDay, utils, AppData } from "@/src/store/store";
 import { computeBalance, formatCurrency, formatDateDMY, computeWeekly } from "@/src/utils/calc";
@@ -231,6 +232,25 @@ function LedgerDetail({
     bal.status === "DEBE" ? C.red : bal.status === "A_FAVOR" ? C.blue : C.green;
 
   const takePhoto = async (entryId: string) => {
+    // Compress + resize helper: max 800px wide, JPEG 60%, output as base64 data URI
+    const compress = async (uri: string): Promise<string> => {
+      try {
+        const result = await ImageManipulator.manipulateAsync(
+          uri,
+          [{ resize: { width: 800 } }],
+          {
+            compress: 0.6,
+            format: ImageManipulator.SaveFormat.JPEG,
+            base64: true,
+          },
+        );
+        if (result.base64) return `data:image/jpeg;base64,${result.base64}`;
+        return result.uri;
+      } catch {
+        return uri;
+      }
+    };
+
     try {
       const perm = await ImagePicker.requestCameraPermissionsAsync();
       if (!perm.granted) {
@@ -243,28 +263,21 @@ function LedgerDetail({
           return;
         }
         const r = await ImagePicker.launchImageLibraryAsync({
-          quality: 0.5,
-          base64: true,
+          quality: 1,
           mediaTypes: ImagePicker.MediaTypeOptions.Images,
         });
         if (!r.canceled && r.assets[0]) {
-          const uri =
-            r.assets[0].base64
-              ? `data:image/jpeg;base64,${r.assets[0].base64}`
-              : r.assets[0].uri;
-          store.updateEntry(kind, liveContact.id, entryId, { photo: uri });
+          const compressed = await compress(r.assets[0].uri);
+          store.updateEntry(kind, liveContact.id, entryId, { photo: compressed });
         }
         return;
       }
       const r = await ImagePicker.launchCameraAsync({
-        quality: 0.5,
-        base64: true,
+        quality: 1,
       });
       if (!r.canceled && r.assets[0]) {
-        const uri = r.assets[0].base64
-          ? `data:image/jpeg;base64,${r.assets[0].base64}`
-          : r.assets[0].uri;
-        store.updateEntry(kind, liveContact.id, entryId, { photo: uri });
+        const compressed = await compress(r.assets[0].uri);
+        store.updateEntry(kind, liveContact.id, entryId, { photo: compressed });
       }
     } catch (e) {
       Alert.alert("Error", "No se pudo capturar la foto");
