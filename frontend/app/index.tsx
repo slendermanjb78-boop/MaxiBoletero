@@ -50,7 +50,6 @@ function BottomTabs({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
     { key: "proveedores", label: "PROVEED.", icon: "truck" },
     { key: "reparto", label: "REPARTO", icon: "map-marker-radius" },
     { key: "cobros", label: "COBROS", icon: "bell-ring-outline" },
-    { key: "ajustes", label: "AJUSTES", icon: "cog" },
   ];
   return (
     <View style={s.bottomTabs} testID="bottom-tabs">
@@ -579,7 +578,11 @@ function ResumenView({
   }, []);
 
   return (
-    <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 140 }}>
+    <ScrollView
+      contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 140 }}
+      keyboardShouldPersistTaps="handled"
+      showsVerticalScrollIndicator={false}
+    >
       <View style={s.screenHeader}>
         <Text style={s.screenTitle}>Resumen Semanal</Text>
         <Text style={s.screenSubtitle}>
@@ -670,9 +673,11 @@ function ResumenView({
 function SettingsView({
   data,
   onRestored,
+  onBack,
 }: {
   data: AppData;
   onRestored: (next: AppData) => void;
+  onBack: () => void;
 }) {
   const { C, s, mode, toggle } = useUI();
   const [busy, setBusy] = useState<"export" | "import" | null>(null);
@@ -759,10 +764,22 @@ function SettingsView({
   const isDark = mode === "dark";
 
   return (
-    <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 140 }}>
-      <View style={s.screenHeader}>
-        <Text style={s.screenTitle}>Ajustes</Text>
-        <Text style={s.screenSubtitle}>Preferencias y respaldo de datos</Text>
+    <ScrollView
+      contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 140 }}
+      keyboardShouldPersistTaps="handled"
+    >
+      <View style={[s.screenHeader, { flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between" }]}>
+        <View>
+          <Text style={s.screenTitle}>Ajustes</Text>
+          <Text style={s.screenSubtitle}>Preferencias y respaldo de datos</Text>
+        </View>
+        <TouchableOpacity
+          onPress={onBack}
+          style={{ padding: 8, marginBottom: 4 }}
+          testID="btn-back-settings"
+        >
+          <Feather name="x" size={26} color={C.ink} />
+        </TouchableOpacity>
       </View>
 
       {/* Theme */}
@@ -1044,8 +1061,19 @@ function RepartoDetail({
         </TouchableOpacity>
       </View>
 
-      <ScrollView contentContainerStyle={{ paddingBottom: 220 }}>
-        <ScrollView horizontal>
+      <ScrollView
+        contentContainerStyle={{ paddingBottom: 220 }}
+        keyboardShouldPersistTaps="handled"
+        directionalLockEnabled={true}
+      >
+        <ScrollView
+          horizontal
+          nestedScrollEnabled={true}
+          directionalLockEnabled={true}
+          keyboardShouldPersistTaps="handled"
+          bounces={false}
+          showsHorizontalScrollIndicator={true}
+        >
           <View>
             <View style={[s.gridRow, s.gridHead]}>
               <View style={[s.rcellOrder, s.headCell]}>
@@ -1288,7 +1316,11 @@ function CobrosView({
         <Text style={s.screenSubtitle}>Recordatorios programados</Text>
       </View>
 
-      <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 160 }}>
+      <ScrollView
+        contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 160 }}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
         {pending.length === 0 && done.length === 0 ? (
           <View style={s.empty}>
             <MaterialCommunityIcons name="bell-ring-outline" size={48} color={C.muted} />
@@ -1577,7 +1609,20 @@ export default function App() {
           <SettingsView
             data={store.data}
             onRestored={(next) => store.replaceAll(next)}
+            onBack={() => setTab("clientes")}
           />
+        )}
+
+        {/* Floating gear icon (top-right) on list screens only */}
+        {tab !== "ajustes" && (
+          <TouchableOpacity
+            style={s.gearBtn}
+            onPress={() => setTab("ajustes")}
+            testID="btn-open-settings"
+            activeOpacity={0.8}
+          >
+            <Feather name="settings" size={20} color={C.ink} />
+          </TouchableOpacity>
         )}
       </View>
       <View style={{ paddingBottom: insets.bottom, backgroundColor: C.tabBg }}>
@@ -1657,6 +1702,26 @@ const makeStyles = (C: ThemeColors) => StyleSheet.create({
     shadowRadius: 16,
     shadowOffset: { width: 0, height: 8 },
     elevation: 8,
+  },
+
+  gearBtn: {
+    position: "absolute",
+    top: 20,
+    right: 16,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: C.card,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: C.borderLight,
+    shadowColor: "#000",
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 3,
+    zIndex: 10,
   },
 
   // Modal
