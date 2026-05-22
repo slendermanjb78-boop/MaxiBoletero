@@ -1125,7 +1125,11 @@ function RepartoDetail({
     const idx = getIndex();
     return (
       <ScaleDecorator>
-        <View
+        <TouchableOpacity
+          onLongPress={drag}
+          delayLongPress={300}
+          disabled={isActive}
+          activeOpacity={0.85}
           style={[
             s.repartoCard,
             isActive && {
@@ -1139,94 +1143,86 @@ function RepartoDetail({
           ]}
           testID={`reparto-card-${item.id}`}
         >
-          {/* TOP: drag handle + name/detail */}
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-            <TouchableOpacity
-              onLongPress={drag}
-              delayLongPress={300}
-              disabled={isActive}
-              style={s.dragHandle}
-              testID={`reparto-drag-${item.id}`}
-              activeOpacity={0.6}
-            >
-              <Text style={s.dragHandleNum}>{(idx ?? 0) + 1}</Text>
-            </TouchableOpacity>
-            <View style={{ flex: 1 }}>
+          {/* LEFT: number box */}
+          <View style={s.numberBox} testID={`reparto-drag-${item.id}`}>
+            <Text style={s.numberBoxText}>{(idx ?? 0) + 1}</Text>
+          </View>
+
+          {/* CENTER: name + detail + CANT */}
+          <View style={s.repartoCenter}>
+            <GridCellInput
+              style={s.repartoName}
+              placeholder="Nombre del cliente"
+              placeholderTextColor="rgba(255,255,255,0.3)"
+              initialValue={item.clientName}
+              onCommit={(t) => store.updateRepartoItem(live.id, item.id, { clientName: t })}
+              testID={`reparto-input-name-${item.id}`}
+            />
+            <GridCellInput
+              style={s.repartoDetail}
+              placeholder="Detalle"
+              placeholderTextColor="rgba(255,255,255,0.3)"
+              initialValue={item.productDetail}
+              onCommit={(t) => store.updateRepartoItem(live.id, item.id, { productDetail: t })}
+            />
+            <View style={s.cantInlineRow}>
+              <Text style={s.cantInlineLabel}>CANT.</Text>
               <GridCellInput
-                style={s.repartoName}
-                placeholder="Nombre del cliente"
-                placeholderTextColor="rgba(255,255,255,0.35)"
-                initialValue={item.clientName}
-                onCommit={(t) => store.updateRepartoItem(live.id, item.id, { clientName: t })}
-                testID={`reparto-input-name-${item.id}`}
-              />
-              <GridCellInput
-                style={s.repartoDetail}
-                placeholder="Detalle del producto"
-                placeholderTextColor="rgba(255,255,255,0.35)"
-                initialValue={item.productDetail}
-                onCommit={(t) => store.updateRepartoItem(live.id, item.id, { productDetail: t })}
+                style={s.cantInlineInput}
+                placeholder="0"
+                placeholderTextColor="rgba(255,255,255,0.25)"
+                keyboardType="numeric"
+                initialValue={item.quantity}
+                sanitize={sanitizeDigits}
+                onCommit={(t) => store.updateRepartoItem(live.id, item.id, { quantity: t })}
               />
             </View>
           </View>
 
-          {/* MIDDLE: big CANT */}
-          <View style={s.cantBigWrap}>
-            <Text style={s.cantBigLabel}>CANT.</Text>
-            <GridCellInput
-              style={s.cantBigInput}
-              placeholder="0"
-              placeholderTextColor="rgba(255,255,255,0.25)"
-              keyboardType="numeric"
-              initialValue={item.quantity}
-              sanitize={sanitizeDigits}
-              onCommit={(t) => store.updateRepartoItem(live.id, item.id, { quantity: t })}
-            />
-            {item.delivered ? (
-              <View style={s.completedTag}>
-                <Feather name="check" size={12} color={C.green} />
-                <Text style={s.completedTagText}>ENTREGADO</Text>
-              </View>
-            ) : null}
-          </View>
-
-          {/* BOTTOM: 3 actions */}
-          <View style={s.actionsRow}>
+          {/* RIGHT: neon switch + delete */}
+          <View style={s.repartoRight}>
             <TouchableOpacity
-              style={s.actionBtn}
               onPress={() =>
-                store.updateRepartoItem(live.id, item.id, { delivered: false })
+                store.updateRepartoItem(live.id, item.id, { delivered: !item.delivered })
               }
-              testID={`reparto-cancel-${item.id}`}
-              activeOpacity={0.6}
+              testID={`reparto-toggle-${item.id}`}
+              activeOpacity={0.8}
+              style={[
+                s.neonSwitch,
+                {
+                  backgroundColor: item.delivered ? "#16a34a" : "#dc2626",
+                  shadowColor: item.delivered ? "#22c55e" : "#ef4444",
+                  borderColor: item.delivered ? "#4ade80" : "#f87171",
+                },
+              ]}
             >
-              <Feather name="x" size={24} color={C.red} strokeWidth={3} />
-              <Text style={s.actionBtnLabel}>CANCELAR</Text>
+              <Text
+                style={[
+                  s.neonSwitchLabel,
+                  item.delivered ? { left: 8 } : { right: 8 },
+                ]}
+              >
+                {item.delivered ? "ON" : "OFF"}
+              </Text>
+              <View
+                style={[
+                  s.neonSwitchKnob,
+                  { left: item.delivered ? 32 : 2 },
+                ]}
+              />
             </TouchableOpacity>
-            <View style={s.actionDivider} />
+
             <TouchableOpacity
-              style={s.actionBtn}
               onPress={() => store.deleteRepartoItem(live.id, item.id)}
+              style={s.deleteSmall}
               testID={`reparto-del-${item.id}`}
               activeOpacity={0.6}
             >
-              <Feather name="trash-2" size={22} color="#fff" />
-              <Text style={s.actionBtnLabel}>ELIMINAR</Text>
-            </TouchableOpacity>
-            <View style={s.actionDivider} />
-            <TouchableOpacity
-              style={s.actionBtn}
-              onPress={() =>
-                store.updateRepartoItem(live.id, item.id, { delivered: true })
-              }
-              testID={`reparto-complete-${item.id}`}
-              activeOpacity={0.6}
-            >
-              <Feather name="check" size={24} color={C.blue} strokeWidth={3} />
-              <Text style={s.actionBtnLabel}>COMPLETAR</Text>
+              <Feather name="trash-2" size={16} color="#fff" />
+              <Text style={s.deleteSmallText}>ELIMINAR</Text>
             </TouchableOpacity>
           </View>
-        </View>
+        </TouchableOpacity>
       </ScaleDecorator>
     );
   };
@@ -2123,108 +2119,114 @@ const makeStyles = (C: ThemeColors) => StyleSheet.create({
   },
   statusText: { fontSize: 10, fontWeight: "800", letterSpacing: 1 },
 
-  // Reparto card (dark, drag layout)
+  // Reparto card (compact horizontal layout)
   repartoCard: {
+    flexDirection: "row",
+    alignItems: "center",
     backgroundColor: "#0b1a36",
-    borderRadius: 18,
-    paddingHorizontal: 14,
-    paddingTop: 14,
-    paddingBottom: 0,
-    marginBottom: 12,
+    borderRadius: 14,
+    paddingHorizontal: 10,
+    paddingVertical: 10,
+    marginBottom: 10,
     borderWidth: 1,
     borderColor: "#172a4d",
+    gap: 10,
   },
-  dragHandle: {
-    width: 46,
-    height: 56,
-    backgroundColor: "#1a2e54",
+  numberBox: {
+    width: 40,
+    height: 40,
+    backgroundColor: "#bfdbfe",
     borderRadius: 10,
     alignItems: "center",
     justifyContent: "center",
-    transform: [{ rotate: "0deg" }],
   },
-  dragHandleNum: {
-    fontSize: 22,
+  numberBoxText: {
+    color: "#1e3a8a",
+    fontSize: 18,
     fontWeight: "800",
-    color: "#93c5fd",
     fontFamily: MONO,
+  },
+  repartoCenter: {
+    flex: 1,
+    gap: 0,
   },
   repartoName: {
-    fontSize: 22,
-    fontWeight: "900",
+    fontSize: 16,
+    fontWeight: "800",
     color: "#fff",
     paddingVertical: 0,
-    letterSpacing: 0.3,
+    letterSpacing: 0.2,
   },
   repartoDetail: {
-    fontSize: 14,
+    fontSize: 13,
     color: "#cbd5e1",
     paddingVertical: 0,
-    marginTop: 2,
+    marginTop: 1,
   },
-  cantBigWrap: {
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 20,
+  cantInlineRow: {
     flexDirection: "row",
-    gap: 8,
+    alignItems: "center",
+    gap: 6,
+    marginTop: 3,
   },
-  cantBigLabel: {
+  cantInlineLabel: {
     color: "#fff",
-    fontSize: 30,
+    fontSize: 16,
     fontWeight: "900",
-    letterSpacing: 1,
+    letterSpacing: 0.5,
   },
-  cantBigInput: {
+  cantInlineInput: {
     color: "#fff",
-    fontSize: 30,
+    fontSize: 16,
     fontWeight: "900",
     fontFamily: MONO,
-    minWidth: 60,
-    textAlign: "center",
+    minWidth: 30,
     paddingVertical: 0,
   },
-  completedTag: {
-    position: "absolute",
-    right: 0,
-    top: 8,
-    flexDirection: "row",
+  repartoRight: {
     alignItems: "center",
-    gap: 4,
-    backgroundColor: "rgba(34,197,94,0.18)",
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 999,
-  },
-  completedTagText: {
-    color: C.green,
-    fontSize: 9,
-    fontWeight: "800",
-    letterSpacing: 1,
-  },
-  actionsRow: {
-    flexDirection: "row",
-    alignItems: "stretch",
-    borderTopWidth: 1,
-    borderTopColor: "#172a4d",
-    marginHorizontal: -14,
-  },
-  actionBtn: {
-    flex: 1,
-    paddingVertical: 14,
-    alignItems: "center",
-    justifyContent: "center",
     gap: 6,
+    justifyContent: "space-between",
+    minHeight: 72,
   },
-  actionBtnLabel: {
+  neonSwitch: {
+    width: 58,
+    height: 26,
+    borderRadius: 999,
+    borderWidth: 1.5,
+    position: "relative",
+    justifyContent: "center",
+    shadowOpacity: 0.85,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 8,
+  },
+  neonSwitchKnob: {
+    position: "absolute",
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: "#fff",
+    top: 0.5,
+  },
+  neonSwitchLabel: {
+    position: "absolute",
+    fontSize: 10,
+    fontWeight: "900",
     color: "#fff",
-    fontSize: 11,
-    fontWeight: "800",
-    letterSpacing: 1.2,
+    letterSpacing: 0.5,
   },
-  actionDivider: {
-    width: 1,
-    backgroundColor: "#172a4d",
+  deleteSmall: {
+    alignItems: "center",
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+  },
+  deleteSmallText: {
+    color: "#fff",
+    fontSize: 9,
+    fontWeight: "700",
+    marginTop: 1,
+    letterSpacing: 0.5,
   },
 
   // Photo modal
