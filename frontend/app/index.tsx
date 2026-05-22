@@ -128,10 +128,10 @@ function ContactList({
         }
         renderItem={({ item }) => {
           const bal = computeBalance(item.entries);
-          const color =
+          // Only the saldo NUMBER follows the dynamic accent/complement.
+          // Labels and pill bg stay neutral for legibility.
+          const amountColor =
             bal.status === "DEBE" ? C.blue : bal.status === "A_FAVOR" ? C.accentAlt : C.green;
-          const bg =
-            bal.status === "DEBE" ? C.blueLight : bal.status === "A_FAVOR" ? C.accentAltLight : C.greenLight;
           const label =
             bal.status === "DEBE" ? "DEBE" : bal.status === "A_FAVOR" ? "A FAVOR" : "SALDADO";
           return (
@@ -150,12 +150,12 @@ function ContactList({
               </View>
               <View style={{ flex: 1, marginLeft: 14 }}>
                 <Text style={s.contactName}>{item.name}</Text>
-                <View style={[s.balPill, { backgroundColor: bg }]}>
-                  <Text style={[s.balPillText, { color }]}>{label}</Text>
+                <View style={[s.balPill, { backgroundColor: C.borderLight }]}>
+                  <Text style={[s.balPillText, { color: C.muted }]}>{label}</Text>
                 </View>
               </View>
               <View style={{ alignItems: "flex-end" }}>
-                <Text style={[s.contactAmount, { color }]}>{formatCurrency(bal.absolute)}</Text>
+                <Text style={[s.contactAmount, { color: amountColor }]}>{formatCurrency(bal.absolute)}</Text>
                 <Text style={s.contactMeta}>{item.entries.length} mov.</Text>
               </View>
             </TouchableOpacity>
@@ -233,7 +233,8 @@ function LedgerDetail({
 
   const statusLabel =
     bal.status === "DEBE" ? "PENDIENTE" : bal.status === "A_FAVOR" ? "A FAVOR" : "SALDADO";
-  const statusColor =
+  // Only the saldo NUMBER takes the dynamic accent/complement color.
+  const amountColor =
     bal.status === "DEBE" ? C.blue : bal.status === "A_FAVOR" ? C.accentAlt : C.green;
 
   // openCamera: opens in-app camera component (no native picker → no app kill)
@@ -315,8 +316,9 @@ function LedgerDetail({
           <Text style={s.detailHeaderTitle} numberOfLines={1}>
             {liveContact.name.toUpperCase()}
           </Text>
-          <Text style={[s.detailHeaderSub, { color: statusColor }]}>
-            {statusLabel}: {formatCurrency(bal.absolute)}
+          <Text style={s.detailHeaderSub}>
+            <Text style={{ color: "#cbd5e1" }}>{statusLabel}: </Text>
+            <Text style={{ color: amountColor }}>{formatCurrency(bal.absolute)}</Text>
           </Text>
         </View>
         <TouchableOpacity onPress={handleShare} style={s.iconBtnDark} testID="btn-share-pdf">
@@ -494,8 +496,8 @@ function LedgerDetail({
                 </Text>
               </View>
               <View style={[s.cellMethod, s.bodyCell, { alignItems: "center" }]}>
-                <View style={[s.balPill, { backgroundColor: statusColor + "22" }]}>
-                  <Text style={[s.balPillText, { color: statusColor }]}>
+                <View style={[s.balPill, { backgroundColor: C.borderLight }]}>
+                  <Text style={[s.balPillText, { color: C.muted }]}>
                     {bal.status === "DEBE"
                       ? "DEBE"
                       : bal.status === "A_FAVOR"
@@ -523,13 +525,15 @@ function LedgerDetail({
       <View style={s.detailFooter}>
         <View>
           <Text style={s.footerLabel}>RESUMEN NETO DE CUENTA</Text>
-          <Text style={[s.footerAmount, { color: statusColor }]}>
-            {bal.status === "DEBE"
-              ? "DEUDOR: "
-              : bal.status === "A_FAVOR"
-                ? "A FAVOR: "
-                : "SALDADO: "}
-            {formatCurrency(bal.absolute)}
+          <Text style={s.footerAmount}>
+            <Text style={{ color: "#cbd5e1" }}>
+              {bal.status === "DEBE"
+                ? "DEUDOR: "
+                : bal.status === "A_FAVOR"
+                  ? "A FAVOR: "
+                  : "SALDADO: "}
+            </Text>
+            <Text style={{ color: amountColor }}>{formatCurrency(bal.absolute)}</Text>
           </Text>
         </View>
         <TouchableOpacity style={s.footerBtn} onPress={onBack} testID="btn-listo">
@@ -1448,18 +1452,24 @@ function CobrosView({
     }
   };
 
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const reminderToDelete = useMemo(
+    () => (data.reminders || []).find((r) => r.id === confirmDeleteId) || null,
+    [data.reminders, confirmDeleteId],
+  );
+
   const handleDelete = (r: Reminder) => {
-    Alert.alert("Eliminar aviso", `¿Eliminar el aviso "${r.concept}"?`, [
-      { text: "Cancelar", style: "cancel" },
-      {
-        text: "Eliminar",
-        style: "destructive",
-        onPress: async () => {
-          await cancelReminder(r.notificationId);
-          store.deleteReminder(r.id);
-        },
-      },
-    ]);
+    setConfirmDeleteId(r.id);
+  };
+
+  const performDelete = async () => {
+    if (!reminderToDelete) return;
+    const target = reminderToDelete;
+    setConfirmDeleteId(null);
+    try {
+      await cancelReminder(target.notificationId);
+    } catch {}
+    await store.deleteReminder(target.id);
   };
 
   const handleToggleDone = async (r: Reminder) => {
@@ -1682,6 +1692,40 @@ function CobrosView({
             </View>
           </View>
         </KeyboardAvoidingView>
+      </Modal>
+
+      {/* Confirmación in-app de borrado (funciona en web + iOS + Android) */}
+      <Modal
+        visible={!!reminderToDelete}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setConfirmDeleteId(null)}
+      >
+        <View style={s.modalBackdrop}>
+          <View style={s.modalCard}>
+            <Text style={s.modalTitle}>Eliminar aviso</Text>
+            <Text style={{ color: C.text, fontSize: 14, marginTop: 6, marginBottom: 18 }}>
+              ¿Eliminar el aviso "{reminderToDelete?.concept}"?
+              {"\n"}Esta acción no se puede deshacer.
+            </Text>
+            <View style={{ flexDirection: "row", gap: 10 }}>
+              <TouchableOpacity
+                style={[s.btnGhost, { flex: 1 }]}
+                onPress={() => setConfirmDeleteId(null)}
+                testID="btn-cancel-delete-reminder"
+              >
+                <Text style={s.btnGhostText}>Cancelar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[s.btnPrimary, { flex: 1, backgroundColor: C.red }]}
+                onPress={performDelete}
+                testID="btn-confirm-delete-reminder"
+              >
+                <Text style={s.btnPrimaryText}>Eliminar</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
       </Modal>
     </View>
   );
