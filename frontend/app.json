@@ -71,7 +71,8 @@
           "color": "#1e5a91"
         }
       ],
-      "@react-native-community/datetimepicker"
+      "@react-native-community/datetimepicker",
+      "expo-audio"
     ],
     "experiments": {
       "typedRoutes": true

@@ -30,6 +30,7 @@ import { useTheme, ThemeColors } from "@/src/theme/theme";
 import { GridCellInput, formatThousands, sanitizeDigits } from "@/src/components/GridCellInput";
 import { CameraModal } from "@/src/components/CameraModal";
 import { DateField } from "@/src/components/DateField";
+import { AdvancedSettings } from "@/src/components/AdvancedSettings";
 
 type Tab = "clientes" | "resumen" | "proveedores" | "reparto" | "cobros" | "ajustes";
 type Kind = "clients" | "providers";
@@ -829,6 +830,9 @@ function SettingsView({
           </View>
         </TouchableOpacity>
       </View>
+
+      {/* Advanced customization (color + tone) */}
+      <AdvancedSettings />
 
       {/* Backup */}
       <View style={s.statBlock}>
