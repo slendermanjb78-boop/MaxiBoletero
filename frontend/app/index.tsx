@@ -129,9 +129,9 @@ function ContactList({
         renderItem={({ item }) => {
           const bal = computeBalance(item.entries);
           const color =
-            bal.status === "DEBE" ? C.red : bal.status === "A_FAVOR" ? C.blue : C.green;
+            bal.status === "DEBE" ? C.blue : bal.status === "A_FAVOR" ? C.accentAlt : C.green;
           const bg =
-            bal.status === "DEBE" ? C.redLight : bal.status === "A_FAVOR" ? C.blueLight : C.greenLight;
+            bal.status === "DEBE" ? C.blueLight : bal.status === "A_FAVOR" ? C.accentAltLight : C.greenLight;
           const label =
             bal.status === "DEBE" ? "DEBE" : bal.status === "A_FAVOR" ? "A FAVOR" : "SALDADO";
           return (
@@ -234,7 +234,7 @@ function LedgerDetail({
   const statusLabel =
     bal.status === "DEBE" ? "PENDIENTE" : bal.status === "A_FAVOR" ? "A FAVOR" : "SALDADO";
   const statusColor =
-    bal.status === "DEBE" ? C.red : bal.status === "A_FAVOR" ? C.blue : C.green;
+    bal.status === "DEBE" ? C.blue : bal.status === "A_FAVOR" ? C.accentAlt : C.green;
 
   // openCamera: opens in-app camera component (no native picker → no app kill)
   const openCamera = (entryId: string) => setCameraForEntry(entryId);
@@ -1349,13 +1349,34 @@ function CobrosView({
   const [showForm, setShowForm] = useState(false);
   const [concept, setConcept] = useState("");
   const [amount, setAmount] = useState("");
-  const [dueDate, setDueDate] = useState<Date>(() => {
+  const computeFreshDue = () => {
     const d = new Date();
     d.setMinutes(d.getMinutes() + 60);
     d.setSeconds(0);
+    d.setMilliseconds(0);
     return d;
-  });
+  };
+  const [dueDate, setDueDate] = useState<Date>(() => computeFreshDue());
   const [saving, setSaving] = useState(false);
+
+  // Show an alert that is safe to display while a Modal is mounted (Android
+  // can swallow Alert.alert when triggered from inside an open Modal — we
+  // defer it slightly so the alert lands on top of the closing modal).
+  const safeAlert = (title: string, msg: string) => {
+    if (Platform.OS === "web") {
+      // eslint-disable-next-line no-alert
+      window.alert(`${title}\n\n${msg}`);
+      return;
+    }
+    setTimeout(() => Alert.alert(title, msg), 250);
+  };
+
+  const openForm = () => {
+    setConcept("");
+    setAmount("");
+    setDueDate(computeFreshDue());
+    setShowForm(true);
+  };
 
   const closeForm = () => {
     setShowForm(false);
@@ -1364,40 +1385,66 @@ function CobrosView({
   };
 
   const submit = async () => {
+    if (saving) return;
     const trimmedConcept = concept.trim();
     const amountNum = Number(amount.replace(/[^0-9]/g, "")) || 0;
     if (!trimmedConcept) {
-      Alert.alert("Falta el concepto", "Indica a quién o por qué hay que cobrar.");
-      return;
-    }
-    if (dueDate.getTime() < Date.now() + 30 * 1000) {
-      Alert.alert("Fecha inválida", "La fecha debe ser al menos 30 segundos en el futuro.");
+      safeAlert("Falta el concepto", "Indica a quién o por qué hay que cobrar.");
       return;
     }
     setSaving(true);
+    // If the user accidentally left a past date (e.g. form was open for a
+    // long time), bump it to "now + 2 minutes" so the reminder can still be
+    // saved and scheduled. We do this silently to never block persistence.
+    let effectiveDue = dueDate;
+    if (effectiveDue.getTime() < Date.now() + 30 * 1000) {
+      effectiveDue = new Date(Date.now() + 2 * 60 * 1000);
+    }
+
+    let notifId: string | null = null;
+    let permissionDenied = false;
     try {
       const granted = await ensureNotificationPermission();
-      let notifId: string | null = null;
       if (granted) {
-        notifId = await scheduleReminder(trimmedConcept, amountNum, dueDate.toISOString());
+        try {
+          notifId = await scheduleReminder(
+            trimmedConcept,
+            amountNum,
+            effectiveDue.toISOString(),
+          );
+        } catch (err) {
+          // schedule failed (e.g. unsupported), continue saving anyway
+          notifId = null;
+        }
+      } else {
+        permissionDenied = true;
       }
-      store.addReminder({
+    } catch {
+      // permission check failed (e.g. web) — keep saving
+    }
+
+    // CRITICAL: persist the reminder regardless of notification outcome.
+    try {
+      await store.addReminder({
         concept: trimmedConcept,
         amount: amountNum,
-        dueAt: dueDate.toISOString(),
+        dueAt: effectiveDue.toISOString(),
         notificationId: notifId,
       });
-      if (!granted && Platform.OS !== "web") {
-        Alert.alert(
-          "Aviso guardado",
-          "No se pudo activar la notificación porque los permisos están denegados. Habilítalos desde los ajustes del sistema.",
-        );
-      }
-      closeForm();
     } catch (e: any) {
-      Alert.alert("Error", e?.message || "No se pudo crear el aviso");
-    } finally {
       setSaving(false);
+      safeAlert("Error", e?.message || "No se pudo guardar el aviso");
+      return;
+    }
+
+    closeForm();
+    setSaving(false);
+
+    if (permissionDenied && Platform.OS !== "web") {
+      safeAlert(
+        "Aviso guardado",
+        "Se guardó el aviso pero no se pudo activar la notificación (permisos denegados). Habilítalos desde los ajustes del sistema.",
+      );
     }
   };
 
@@ -1547,7 +1594,7 @@ function CobrosView({
 
       <TouchableOpacity
         style={s.fab}
-        onPress={() => setShowForm(true)}
+        onPress={openForm}
         testID="fab-add-reminder"
       >
         <Feather name="plus" size={26} color="#fff" />

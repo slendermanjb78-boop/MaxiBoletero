@@ -21,6 +21,9 @@ export interface ThemeColors {
   yellowLight: string;
   amber: string;
   blueInk: string;
+  // complementary accent (auto-derived from `blue` = accent)
+  accentAlt: string;
+  accentAltLight: string;
   // contrast color to use ON TOP of accent (blue) — black or white
   onAccent: string;
   // tab bar / header on top of bg
@@ -87,58 +90,115 @@ export const darken = (hex: string, amount = 0.35): string => {
   return rgbToHex(r * (1 - amount), g * (1 - amount), b * (1 - amount));
 };
 
-// ---------- Palettes ----------
-const buildLight = (accent: string): ThemeColors => ({
-  bg: "#f8fafc",
-  card: "#ffffff",
-  ink: "#0f172a",
-  text: "#334155",
-  muted: "#64748b",
-  border: "#e2e8f0",
-  borderLight: "#f1f5f9",
-  blue: accent,
-  blueLight: withAlpha(accent, 0.14),
-  red: "#dc2626",
-  redLight: "#fee2e2",
-  green: "#16a34a",
-  greenLight: "#dcfce7",
-  yellow: "#facc15",
-  yellowLight: "#fef9c3",
-  amber: "#92400e",
-  blueInk: darken(accent, 0.4),
-  onAccent: contrastOn(accent),
-  tabBg: "#ffffff",
-  dark: "#0f172a",
-  darkBorder: "#1e293b",
-  darkMuted: "#94a3b8",
-  rowAlt: "#f8fafc",
-});
+// HSL utilities for complement color
+const rgbToHsl = (r: number, g: number, b: number) => {
+  r /= 255; g /= 255; b /= 255;
+  const max = Math.max(r, g, b), min = Math.min(r, g, b);
+  let h = 0, s = 0;
+  const l = (max + min) / 2;
+  const d = max - min;
+  if (d !== 0) {
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    switch (max) {
+      case r: h = (g - b) / d + (g < b ? 6 : 0); break;
+      case g: h = (b - r) / d + 2; break;
+      case b: h = (r - g) / d + 4; break;
+    }
+    h *= 60;
+  }
+  return { h, s, l };
+};
 
-const buildDark = (accent: string): ThemeColors => ({
-  bg: "#020617",
-  card: "#0f172a",
-  ink: "#f8fafc",
-  text: "#cbd5e1",
-  muted: "#94a3b8",
-  border: "#1e293b",
-  borderLight: "#1e293b",
-  blue: accent,
-  blueLight: withAlpha(accent, 0.18),
-  red: "#f87171",
-  redLight: "rgba(239,68,68,0.18)",
-  green: "#4ade80",
-  greenLight: "rgba(34,197,94,0.18)",
-  yellow: "#facc15",
-  yellowLight: "rgba(250,204,21,0.18)",
-  amber: "#fbbf24",
-  blueInk: darken(accent, 0.45),
-  onAccent: contrastOn(accent),
-  tabBg: "#0f172a",
-  dark: "#020617",
-  darkBorder: "#1e293b",
-  darkMuted: "#94a3b8",
-  rowAlt: "#0b1220",
-});
+const hslToRgb = (h: number, s: number, l: number) => {
+  h = ((h % 360) + 360) % 360;
+  const c = (1 - Math.abs(2 * l - 1)) * s;
+  const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
+  const m = l - c / 2;
+  let r = 0, g = 0, b = 0;
+  if (h < 60) { r = c; g = x; b = 0; }
+  else if (h < 120) { r = x; g = c; b = 0; }
+  else if (h < 180) { r = 0; g = c; b = x; }
+  else if (h < 240) { r = 0; g = x; b = c; }
+  else if (h < 300) { r = x; g = 0; b = c; }
+  else { r = c; g = 0; b = x; }
+  return { r: (r + m) * 255, g: (g + m) * 255, b: (b + m) * 255 };
+};
+
+// Complementary color in HSL space (hue + 180°). If accent is achromatic
+// (saturation ~ 0), fall back to a warm orange so the contrast is meaningful.
+export const complement = (hex: string): string => {
+  const { r, g, b } = hexToRgb(hex);
+  const hsl = rgbToHsl(r, g, b);
+  if (hsl.s < 0.08) return "#f59e0b"; // neutral accent → friendly orange
+  // Boost saturation a tiny bit to keep complement vivid
+  const compS = Math.min(1, hsl.s * 1.05);
+  const compL = Math.min(0.62, Math.max(0.38, hsl.l));
+  const { r: cr, g: cg, b: cb } = hslToRgb(hsl.h + 180, compS, compL);
+  return rgbToHex(cr, cg, cb);
+};
+
+// ---------- Palettes ----------
+const buildLight = (accent: string): ThemeColors => {
+  const alt = complement(accent);
+  return {
+    bg: "#f8fafc",
+    card: "#ffffff",
+    ink: "#0f172a",
+    text: "#334155",
+    muted: "#64748b",
+    border: "#e2e8f0",
+    borderLight: "#f1f5f9",
+    blue: accent,
+    blueLight: withAlpha(accent, 0.14),
+    red: "#dc2626",
+    redLight: "#fee2e2",
+    green: "#16a34a",
+    greenLight: "#dcfce7",
+    yellow: "#facc15",
+    yellowLight: "#fef9c3",
+    amber: "#92400e",
+    blueInk: darken(accent, 0.4),
+    accentAlt: alt,
+    accentAltLight: withAlpha(alt, 0.16),
+    onAccent: contrastOn(accent),
+    tabBg: "#ffffff",
+    dark: "#0f172a",
+    darkBorder: "#1e293b",
+    darkMuted: "#94a3b8",
+    rowAlt: "#f8fafc",
+  };
+};
+
+const buildDark = (accent: string): ThemeColors => {
+  const alt = complement(accent);
+  return {
+    bg: "#020617",
+    card: "#0f172a",
+    ink: "#f8fafc",
+    text: "#cbd5e1",
+    muted: "#94a3b8",
+    border: "#1e293b",
+    borderLight: "#1e293b",
+    blue: accent,
+    blueLight: withAlpha(accent, 0.18),
+    red: "#f87171",
+    redLight: "rgba(239,68,68,0.18)",
+    green: "#4ade80",
+    greenLight: "rgba(34,197,94,0.18)",
+    yellow: "#facc15",
+    yellowLight: "rgba(250,204,21,0.18)",
+    amber: "#fbbf24",
+    blueInk: darken(accent, 0.45),
+    accentAlt: alt,
+    accentAltLight: withAlpha(alt, 0.22),
+    onAccent: contrastOn(accent),
+    tabBg: "#0f172a",
+    dark: "#020617",
+    darkBorder: "#1e293b",
+    darkMuted: "#94a3b8",
+    rowAlt: "#0b1220",
+  };
+};
 
 export const LIGHT: ThemeColors = buildLight(DEFAULT_ACCENT_LIGHT);
 export const DARK: ThemeColors = buildDark(DEFAULT_ACCENT_DARK);
