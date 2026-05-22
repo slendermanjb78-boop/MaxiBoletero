@@ -1130,94 +1130,101 @@ function RepartoDetail({
             s.repartoCard,
             isActive && {
               shadowColor: "#000",
-              shadowOpacity: 0.25,
-              shadowRadius: 14,
-              shadowOffset: { width: 0, height: 8 },
-              elevation: 12,
+              shadowOpacity: 0.4,
+              shadowRadius: 16,
+              shadowOffset: { width: 0, height: 10 },
+              elevation: 14,
               borderColor: C.blue,
             },
           ]}
           testID={`reparto-card-${item.id}`}
         >
-          <TouchableOpacity
-            onLongPress={drag}
-            delayLongPress={300}
-            disabled={isActive}
-            style={s.dragHandle}
-            testID={`reparto-drag-${item.id}`}
-            activeOpacity={0.6}
-          >
-            <Feather name="menu" size={20} color={C.muted} />
-            <Text style={s.dragHandleNum}>{(idx ?? 0) + 1}</Text>
-          </TouchableOpacity>
-
-          <View style={{ flex: 1, gap: 4 }}>
-            <GridCellInput
-              style={[s.cellInput, { fontSize: 14, fontWeight: "700", color: C.ink, paddingVertical: 2 }]}
-              placeholder="Nombre del cliente"
-              placeholderTextColor={C.muted}
-              initialValue={item.clientName}
-              onCommit={(t) => store.updateRepartoItem(live.id, item.id, { clientName: t })}
-              testID={`reparto-input-name-${item.id}`}
-            />
-            <GridCellInput
-              style={[s.cellInput, { fontSize: 12, color: C.text, paddingVertical: 2 }]}
-              placeholder="Detalle del producto"
-              placeholderTextColor={C.muted}
-              initialValue={item.productDetail}
-              onCommit={(t) => store.updateRepartoItem(live.id, item.id, { productDetail: t })}
-            />
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 4 }}>
-              <View style={s.qtyBadge}>
-                <Text style={s.qtyBadgeLabel}>CANT.</Text>
-                <GridCellInput
-                  style={s.qtyBadgeInput}
-                  placeholder="0"
-                  placeholderTextColor={C.muted}
-                  keyboardType="numeric"
-                  initialValue={item.quantity}
-                  sanitize={sanitizeDigits}
-                  onCommit={(t) => store.updateRepartoItem(live.id, item.id, { quantity: t })}
-                />
-              </View>
-              <TouchableOpacity
-                onPress={() =>
-                  store.updateRepartoItem(live.id, item.id, { delivered: !item.delivered })
-                }
-                testID={`reparto-toggle-${item.id}`}
-                style={[
-                  s.statusPill,
-                  {
-                    backgroundColor: item.delivered ? C.greenLight : C.redLight,
-                    paddingVertical: 6,
-                    paddingHorizontal: 10,
-                    flex: 1,
-                    justifyContent: "center",
-                  },
-                ]}
-              >
-                <MaterialCommunityIcons
-                  name={item.delivered ? "check-circle" : "close-circle"}
-                  size={14}
-                  color={item.delivered ? C.green : C.red}
-                />
-                <Text
-                  style={[
-                    s.statusText,
-                    { color: item.delivered ? C.green : C.red, fontSize: 10 },
-                  ]}
-                >
-                  {item.delivered ? "ENTREGADO" : "PENDIENTE"}
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={() => store.deleteRepartoItem(live.id, item.id)}
-                style={s.deleteItemBtn}
-                testID={`reparto-del-${item.id}`}
-              >
-                <Feather name="trash-2" size={14} color={C.red} />
-              </TouchableOpacity>
+          {/* TOP: drag handle + name/detail */}
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+            <TouchableOpacity
+              onLongPress={drag}
+              delayLongPress={300}
+              disabled={isActive}
+              style={s.dragHandle}
+              testID={`reparto-drag-${item.id}`}
+              activeOpacity={0.6}
+            >
+              <Text style={s.dragHandleNum}>{(idx ?? 0) + 1}</Text>
+            </TouchableOpacity>
+            <View style={{ flex: 1 }}>
+              <GridCellInput
+                style={s.repartoName}
+                placeholder="Nombre del cliente"
+                placeholderTextColor="rgba(255,255,255,0.35)"
+                initialValue={item.clientName}
+                onCommit={(t) => store.updateRepartoItem(live.id, item.id, { clientName: t })}
+                testID={`reparto-input-name-${item.id}`}
+              />
+              <GridCellInput
+                style={s.repartoDetail}
+                placeholder="Detalle del producto"
+                placeholderTextColor="rgba(255,255,255,0.35)"
+                initialValue={item.productDetail}
+                onCommit={(t) => store.updateRepartoItem(live.id, item.id, { productDetail: t })}
+              />
             </View>
+          </View>
+
+          {/* MIDDLE: big CANT */}
+          <View style={s.cantBigWrap}>
+            <Text style={s.cantBigLabel}>CANT.</Text>
+            <GridCellInput
+              style={s.cantBigInput}
+              placeholder="0"
+              placeholderTextColor="rgba(255,255,255,0.25)"
+              keyboardType="numeric"
+              initialValue={item.quantity}
+              sanitize={sanitizeDigits}
+              onCommit={(t) => store.updateRepartoItem(live.id, item.id, { quantity: t })}
+            />
+            {item.delivered ? (
+              <View style={s.completedTag}>
+                <Feather name="check" size={12} color={C.green} />
+                <Text style={s.completedTagText}>ENTREGADO</Text>
+              </View>
+            ) : null}
+          </View>
+
+          {/* BOTTOM: 3 actions */}
+          <View style={s.actionsRow}>
+            <TouchableOpacity
+              style={s.actionBtn}
+              onPress={() =>
+                store.updateRepartoItem(live.id, item.id, { delivered: false })
+              }
+              testID={`reparto-cancel-${item.id}`}
+              activeOpacity={0.6}
+            >
+              <Feather name="x" size={24} color={C.red} strokeWidth={3} />
+              <Text style={s.actionBtnLabel}>CANCELAR</Text>
+            </TouchableOpacity>
+            <View style={s.actionDivider} />
+            <TouchableOpacity
+              style={s.actionBtn}
+              onPress={() => store.deleteRepartoItem(live.id, item.id)}
+              testID={`reparto-del-${item.id}`}
+              activeOpacity={0.6}
+            >
+              <Feather name="trash-2" size={22} color="#fff" />
+              <Text style={s.actionBtnLabel}>ELIMINAR</Text>
+            </TouchableOpacity>
+            <View style={s.actionDivider} />
+            <TouchableOpacity
+              style={s.actionBtn}
+              onPress={() =>
+                store.updateRepartoItem(live.id, item.id, { delivered: true })
+              }
+              testID={`reparto-complete-${item.id}`}
+              activeOpacity={0.6}
+            >
+              <Feather name="check" size={24} color={C.blue} strokeWidth={3} />
+              <Text style={s.actionBtnLabel}>COMPLETAR</Text>
+            </TouchableOpacity>
           </View>
         </View>
       </ScaleDecorator>
@@ -2116,62 +2123,108 @@ const makeStyles = (C: ThemeColors) => StyleSheet.create({
   },
   statusText: { fontSize: 10, fontWeight: "800", letterSpacing: 1 },
 
-  // Reparto card (drag layout)
+  // Reparto card (dark, drag layout)
   repartoCard: {
-    flexDirection: "row",
-    alignItems: "stretch",
-    backgroundColor: C.card,
+    backgroundColor: "#0b1a36",
     borderRadius: 18,
-    padding: 10,
-    marginBottom: 10,
+    paddingHorizontal: 14,
+    paddingTop: 14,
+    paddingBottom: 0,
+    marginBottom: 12,
     borderWidth: 1,
-    borderColor: C.borderLight,
-    gap: 10,
+    borderColor: "#172a4d",
   },
   dragHandle: {
-    width: 32,
-    backgroundColor: C.borderLight,
+    width: 46,
+    height: 56,
+    backgroundColor: "#1a2e54",
     borderRadius: 10,
     alignItems: "center",
     justifyContent: "center",
-    gap: 2,
+    transform: [{ rotate: "0deg" }],
   },
   dragHandleNum: {
-    fontSize: 10,
+    fontSize: 22,
     fontWeight: "800",
-    color: C.muted,
+    color: "#93c5fd",
     fontFamily: MONO,
   },
-  qtyBadge: {
-    backgroundColor: C.borderLight,
-    borderRadius: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    minWidth: 50,
-    alignItems: "center",
-  },
-  qtyBadgeLabel: {
-    fontSize: 8,
-    fontWeight: "800",
-    color: C.muted,
-    letterSpacing: 0.8,
-  },
-  qtyBadgeInput: {
-    fontFamily: MONO,
-    fontSize: 14,
-    fontWeight: "800",
-    color: C.ink,
+  repartoName: {
+    fontSize: 22,
+    fontWeight: "900",
+    color: "#fff",
     paddingVertical: 0,
-    minWidth: 34,
-    textAlign: "center",
+    letterSpacing: 0.3,
   },
-  deleteItemBtn: {
-    width: 30,
-    height: 30,
-    borderRadius: 8,
-    backgroundColor: C.redLight,
+  repartoDetail: {
+    fontSize: 14,
+    color: "#cbd5e1",
+    paddingVertical: 0,
+    marginTop: 2,
+  },
+  cantBigWrap: {
     alignItems: "center",
     justifyContent: "center",
+    paddingVertical: 20,
+    flexDirection: "row",
+    gap: 8,
+  },
+  cantBigLabel: {
+    color: "#fff",
+    fontSize: 30,
+    fontWeight: "900",
+    letterSpacing: 1,
+  },
+  cantBigInput: {
+    color: "#fff",
+    fontSize: 30,
+    fontWeight: "900",
+    fontFamily: MONO,
+    minWidth: 60,
+    textAlign: "center",
+    paddingVertical: 0,
+  },
+  completedTag: {
+    position: "absolute",
+    right: 0,
+    top: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "rgba(34,197,94,0.18)",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 999,
+  },
+  completedTagText: {
+    color: C.green,
+    fontSize: 9,
+    fontWeight: "800",
+    letterSpacing: 1,
+  },
+  actionsRow: {
+    flexDirection: "row",
+    alignItems: "stretch",
+    borderTopWidth: 1,
+    borderTopColor: "#172a4d",
+    marginHorizontal: -14,
+  },
+  actionBtn: {
+    flex: 1,
+    paddingVertical: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+  },
+  actionBtnLabel: {
+    color: "#fff",
+    fontSize: 11,
+    fontWeight: "800",
+    letterSpacing: 1.2,
+  },
+  actionDivider: {
+    width: 1,
+    backgroundColor: "#172a4d",
   },
 
   // Photo modal
