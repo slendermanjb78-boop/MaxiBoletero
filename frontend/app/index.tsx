@@ -19,6 +19,7 @@ import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context"
 import { MaterialCommunityIcons, Feather } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import * as ImageManipulator from "expo-image-manipulator";
+import DraggableFlatList, { ScaleDecorator } from "react-native-draggable-flatlist";
 
 import { useStore, Contact, RepartoDay, Reminder, utils, AppData } from "@/src/store/store";
 import { computeBalance, formatCurrency, formatDateDMY, computeWeekly } from "@/src/utils/calc";
@@ -937,29 +938,43 @@ function KpiCard({
 function RepartoList({
   data,
   onSelect,
-  onAdd,
 }: {
   data: ReturnType<typeof useStore>["data"];
   onSelect: (d: RepartoDay) => void;
-  onAdd: () => void;
 }) {
   const { C, s } = useUI();
+  const store = useStore();
+  const [showForm, setShowForm] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [newDate, setNewDate] = useState<Date>(() => new Date());
   const sorted = [...data.repartos].sort((a, b) => b.date.localeCompare(a.date));
+
+  const handleCreate = async () => {
+    const t = `${newDate.getFullYear()}-${String(newDate.getMonth() + 1).padStart(2, "0")}-${String(newDate.getDate()).padStart(2, "0")}`;
+    const id = await store.addRepartoDay(t, newName);
+    setShowForm(false);
+    setNewName("");
+    setNewDate(new Date());
+    const fresh = store.data.repartos.find((r) => r.id === id);
+    if (fresh) onSelect(fresh);
+  };
+
   return (
     <View style={{ flex: 1 }}>
       <View style={s.screenHeader}>
         <Text style={s.screenTitle}>Reparto</Text>
-        <Text style={s.screenSubtitle}>Planilla diaria de entregas</Text>
+        <Text style={s.screenSubtitle}>Planillas de entregas</Text>
       </View>
       <FlatList
         data={sorted}
         keyExtractor={(d) => d.id}
         contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 140 }}
+        keyboardShouldPersistTaps="handled"
         ListEmptyComponent={
           <View style={s.empty}>
-            <MaterialCommunityIcons name="map-marker-radius" size={48} color="#cbd5e1" />
+            <MaterialCommunityIcons name="map-marker-radius" size={48} color={C.muted} />
             <Text style={s.emptyText}>Sin repartos cargados</Text>
-            <Text style={s.emptySub}>Toca el + para crear el día de hoy</Text>
+            <Text style={s.emptySub}>Toca el + para crear el primero</Text>
           </View>
         }
         renderItem={({ item }) => {
@@ -973,11 +988,15 @@ function RepartoList({
               testID={`reparto-${item.id}`}
             >
               <View style={s.avatar}>
-                <MaterialCommunityIcons name="calendar" size={22} color={C.ink} />
+                <MaterialCommunityIcons name="map-marker-radius" size={22} color={C.ink} />
               </View>
               <View style={{ flex: 1, marginLeft: 14 }}>
-                <Text style={s.contactName}>{formatDateDMY(item.date)}</Text>
-                <Text style={s.contactMeta}>{total} entregas planificadas</Text>
+                <Text style={s.contactName} numberOfLines={1}>
+                  {item.name || formatDateDMY(item.date)}
+                </Text>
+                <Text style={s.contactMeta}>
+                  {formatDateDMY(item.date)} · {total} entregas
+                </Text>
               </View>
               <View style={{ alignItems: "flex-end" }}>
                 <View
@@ -1006,9 +1025,65 @@ function RepartoList({
           );
         }}
       />
-      <TouchableOpacity style={s.fab} onPress={onAdd} testID="fab-add-reparto">
+      <TouchableOpacity
+        style={s.fab}
+        onPress={() => {
+          setNewName("");
+          setNewDate(new Date());
+          setShowForm(true);
+        }}
+        testID="fab-add-reparto"
+      >
         <Feather name="plus" size={26} color="#fff" />
       </TouchableOpacity>
+
+      <Modal visible={showForm} transparent animationType="fade" onRequestClose={() => setShowForm(false)}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={s.modalBackdrop}
+        >
+          <View style={s.modalCard}>
+            <Text style={s.modalTitle}>Nuevo reparto</Text>
+
+            <Text style={[s.statRowLabel, { marginBottom: 6, marginTop: 4 }]}>Nombre / etiqueta</Text>
+            <TextInput
+              style={s.input}
+              placeholder="Ej. Reparto de cerdo"
+              placeholderTextColor={C.muted}
+              value={newName}
+              onChangeText={setNewName}
+              autoFocus
+              testID="input-reparto-name"
+            />
+
+            <Text style={[s.statRowLabel, { marginBottom: 6, marginTop: 12 }]}>Fecha</Text>
+            <DateField
+              value={newDate}
+              mode="date"
+              onChange={setNewDate}
+              style={[s.input, { paddingVertical: 14, justifyContent: "center" }]}
+              textStyle={{ color: C.ink, fontWeight: "700" }}
+              testID="input-reparto-date"
+            />
+
+            <View style={{ flexDirection: "row", gap: 10, marginTop: 16 }}>
+              <TouchableOpacity
+                style={[s.btnGhost, { flex: 1 }]}
+                onPress={() => setShowForm(false)}
+              >
+                <Text style={s.btnGhostText}>Cancelar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[s.btnPrimary, { flex: 1 }]}
+                onPress={handleCreate}
+                testID="btn-confirm-reparto"
+              >
+                <Text style={s.btnPrimaryText}>Crear</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </View>
   );
 }
@@ -1025,11 +1100,13 @@ function RepartoDetail({
   const live = store.data.repartos.find((d) => d.id === day.id) || day;
   const total = live.items.length;
   const delivered = live.items.filter((i) => i.delivered).length;
+  const [editingName, setEditingName] = useState(false);
+  const [nameDraft, setNameDraft] = useState(live.name || "");
 
   const confirmDelete = () => {
     Alert.alert(
       "Eliminar reparto",
-      `¿Eliminar todo el reparto del ${formatDateDMY(live.date)}?`,
+      `¿Eliminar "${live.name || formatDateDMY(live.date)}" completo?`,
       [
         { text: "Cancelar", style: "cancel" },
         {
@@ -1044,155 +1121,157 @@ function RepartoDetail({
     );
   };
 
+  const renderItem = ({ item, drag, isActive, getIndex }: any) => {
+    const idx = getIndex();
+    return (
+      <ScaleDecorator>
+        <View
+          style={[
+            s.repartoCard,
+            isActive && {
+              shadowColor: "#000",
+              shadowOpacity: 0.25,
+              shadowRadius: 14,
+              shadowOffset: { width: 0, height: 8 },
+              elevation: 12,
+              borderColor: C.blue,
+            },
+          ]}
+          testID={`reparto-card-${item.id}`}
+        >
+          <TouchableOpacity
+            onLongPress={drag}
+            delayLongPress={300}
+            disabled={isActive}
+            style={s.dragHandle}
+            testID={`reparto-drag-${item.id}`}
+            activeOpacity={0.6}
+          >
+            <Feather name="menu" size={20} color={C.muted} />
+            <Text style={s.dragHandleNum}>{(idx ?? 0) + 1}</Text>
+          </TouchableOpacity>
+
+          <View style={{ flex: 1, gap: 6 }}>
+            <GridCellInput
+              style={[s.cellInput, { fontSize: 15, fontWeight: "700", color: C.ink }]}
+              placeholder="Nombre del cliente"
+              placeholderTextColor={C.muted}
+              initialValue={item.clientName}
+              onCommit={(t) => store.updateRepartoItem(live.id, item.id, { clientName: t })}
+              testID={`reparto-input-name-${item.id}`}
+            />
+            <GridCellInput
+              style={[s.cellInput, { fontSize: 13, color: C.text }]}
+              placeholder="Detalle del producto"
+              placeholderTextColor={C.muted}
+              initialValue={item.productDetail}
+              onCommit={(t) => store.updateRepartoItem(live.id, item.id, { productDetail: t })}
+            />
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginTop: 2 }}>
+              <View style={s.qtyBadge}>
+                <Text style={s.qtyBadgeLabel}>CANT.</Text>
+                <GridCellInput
+                  style={s.qtyBadgeInput}
+                  placeholder="0"
+                  placeholderTextColor={C.muted}
+                  keyboardType="numeric"
+                  initialValue={item.quantity}
+                  sanitize={sanitizeDigits}
+                  onCommit={(t) => store.updateRepartoItem(live.id, item.id, { quantity: t })}
+                />
+              </View>
+              <TouchableOpacity
+                onPress={() =>
+                  store.updateRepartoItem(live.id, item.id, { delivered: !item.delivered })
+                }
+                testID={`reparto-toggle-${item.id}`}
+                style={[
+                  s.statusPill,
+                  { backgroundColor: item.delivered ? C.greenLight : C.redLight, paddingVertical: 8 },
+                ]}
+              >
+                <MaterialCommunityIcons
+                  name={item.delivered ? "check-circle" : "close-circle"}
+                  size={16}
+                  color={item.delivered ? C.green : C.red}
+                />
+                <Text style={[s.statusText, { color: item.delivered ? C.green : C.red }]}>
+                  {item.delivered ? "ENTREGADO" : "PENDIENTE"}
+                </Text>
+              </TouchableOpacity>
+              <View style={{ flex: 1 }} />
+              <TouchableOpacity
+                onPress={() => store.deleteRepartoItem(live.id, item.id)}
+                style={s.deleteItemBtn}
+                testID={`reparto-del-${item.id}`}
+              >
+                <Feather name="trash-2" size={16} color={C.red} />
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </ScaleDecorator>
+    );
+  };
+
   return (
     <View style={{ flex: 1, backgroundColor: C.bg }}>
       <View style={s.detailHeader}>
         <TouchableOpacity onPress={onBack} style={s.iconBtnDark}>
           <Feather name="chevron-left" size={26} color="#fff" />
         </TouchableOpacity>
-        <View style={{ flex: 1, alignItems: "center" }}>
-          <Text style={s.detailHeaderTitle}>REPARTO {formatDateDMY(live.date)}</Text>
-          <Text style={[s.detailHeaderSub, { color: C.blue }]}>
-            {delivered}/{total} ENTREGADOS
+        <TouchableOpacity
+          style={{ flex: 1, alignItems: "center" }}
+          onPress={() => {
+            setNameDraft(live.name || "");
+            setEditingName(true);
+          }}
+          testID="btn-edit-reparto-name"
+        >
+          <Text style={s.detailHeaderTitle} numberOfLines={1}>
+            {(live.name || formatDateDMY(live.date)).toUpperCase()}
           </Text>
-        </View>
+          <Text style={[s.detailHeaderSub, { color: C.blue }]}>
+            {formatDateDMY(live.date)} · {delivered}/{total} ENTREGADOS
+          </Text>
+        </TouchableOpacity>
         <TouchableOpacity onPress={confirmDelete} style={s.iconBtnDark} testID="btn-delete-reparto">
           <Feather name="trash-2" size={22} color={C.red} />
         </TouchableOpacity>
       </View>
 
-      <ScrollView
-        contentContainerStyle={{ paddingBottom: 220 }}
-        keyboardShouldPersistTaps="handled"
-        directionalLockEnabled={true}
-      >
-        <ScrollView
-          horizontal
-          nestedScrollEnabled={true}
-          directionalLockEnabled={true}
-          keyboardShouldPersistTaps="handled"
-          bounces={false}
-          showsHorizontalScrollIndicator={true}
-        >
-          <View>
-            <View style={[s.gridRow, s.gridHead]}>
-              <View style={[s.rcellOrder, s.headCell]}>
-                <Text style={s.headText}>#</Text>
-              </View>
-              <View style={[s.rcellName, s.headCell]}>
-                <Text style={s.headText}>CLIENTE</Text>
-              </View>
-              <View style={[s.rcellProd, s.headCell]}>
-                <Text style={s.headText}>PRODUCTO</Text>
-              </View>
-              <View style={[s.rcellQty, s.headCell]}>
-                <Text style={s.headText}>CANT.</Text>
-              </View>
-              <View style={[s.rcellStatus, s.headCell]}>
-                <Text style={s.headText}>ESTADO</Text>
-              </View>
-            </View>
-            {live.items.map((it, idx) => (
-              <View key={it.id} style={s.gridRow}>
-                <View style={[s.rcellOrder, s.bodyCell, { alignItems: "center", flexDirection: "column", gap: 2 }]}>
-                  <TouchableOpacity
-                    onPress={() => store.moveRepartoItem(live.id, it.id, -1)}
-                    disabled={idx === 0}
-                    style={[s.orderBtn, { opacity: idx === 0 ? 0.25 : 1 }]}
-                    testID={`reparto-up-${it.id}`}
-                  >
-                    <Feather name="chevron-up" size={14} color={C.ink} />
-                  </TouchableOpacity>
-                  <Text style={s.orderNum}>{idx + 1}</Text>
-                  <TouchableOpacity
-                    onPress={() => store.moveRepartoItem(live.id, it.id, 1)}
-                    disabled={idx === live.items.length - 1}
-                    style={[s.orderBtn, { opacity: idx === live.items.length - 1 ? 0.25 : 1 }]}
-                    testID={`reparto-down-${it.id}`}
-                  >
-                    <Feather name="chevron-down" size={14} color={C.ink} />
-                  </TouchableOpacity>
-                </View>
-                <View style={[s.rcellName, s.bodyCell]}>
-                  <GridCellInput
-                    style={s.cellInput}
-                    placeholder="Nombre"
-                    placeholderTextColor={C.muted}
-                    initialValue={it.clientName}
-                    onCommit={(t) =>
-                      store.updateRepartoItem(live.id, it.id, { clientName: t })
-                    }
-                    testID={`reparto-input-name-${it.id}`}
-                  />
-                </View>
-                <View style={[s.rcellProd, s.bodyCell]}>
-                  <GridCellInput
-                    style={s.cellInput}
-                    placeholder="Detalle producto"
-                    placeholderTextColor={C.muted}
-                    initialValue={it.productDetail}
-                    onCommit={(t) =>
-                      store.updateRepartoItem(live.id, it.id, { productDetail: t })
-                    }
-                  />
-                </View>
-                <View style={[s.rcellQty, s.bodyCell]}>
-                  <GridCellInput
-                    style={s.cellInputNum}
-                    placeholder="0"
-                    placeholderTextColor={C.muted}
-                    keyboardType="numeric"
-                    initialValue={it.quantity}
-                    sanitize={sanitizeDigits}
-                    onCommit={(t) =>
-                      store.updateRepartoItem(live.id, it.id, { quantity: t })
-                    }
-                  />
-                </View>
-                <TouchableOpacity
-                  style={[s.rcellStatus, s.bodyCell, { alignItems: "center" }]}
-                  onPress={() =>
-                    store.updateRepartoItem(live.id, it.id, { delivered: !it.delivered })
-                  }
-                  testID={`reparto-toggle-${it.id}`}
-                >
-                  <View
-                    style={[
-                      s.statusPill,
-                      {
-                        backgroundColor: it.delivered ? C.greenLight : C.redLight,
-                      },
-                    ]}
-                  >
-                    <MaterialCommunityIcons
-                      name={it.delivered ? "check-circle" : "close-circle"}
-                      size={14}
-                      color={it.delivered ? C.green : C.red}
-                    />
-                    <Text
-                      style={[
-                        s.statusText,
-                        { color: it.delivered ? C.green : C.red },
-                      ]}
-                    >
-                      {it.delivered ? "ENTREGADO" : "NO ENTREG."}
-                    </Text>
-                  </View>
-                </TouchableOpacity>
-              </View>
-            ))}
-          </View>
-        </ScrollView>
+      <View style={{ paddingHorizontal: 12, paddingVertical: 8, flexDirection: "row", alignItems: "center", gap: 8 }}>
+        <MaterialCommunityIcons name="gesture-tap-hold" size={16} color={C.muted} />
+        <Text style={{ color: C.muted, fontSize: 12, flex: 1 }}>
+          Mantén presionado el ícono ≡ para reordenar
+        </Text>
+      </View>
 
-        <TouchableOpacity
-          style={s.addRowBtn}
-          onPress={() => store.addRepartoItem(live.id)}
-          testID="btn-add-reparto-item"
-        >
-          <Feather name="plus" size={18} color={C.blue} />
-          <Text style={s.addRowText}>NUEVA ENTREGA</Text>
-        </TouchableOpacity>
-      </ScrollView>
+      <DraggableFlatList
+        data={live.items}
+        keyExtractor={(it) => it.id}
+        onDragEnd={({ data: newItems }) => store.reorderRepartoItems(live.id, newItems)}
+        renderItem={renderItem}
+        contentContainerStyle={{ paddingHorizontal: 12, paddingBottom: 240 }}
+        activationDistance={6}
+        ListEmptyComponent={
+          <View style={s.empty}>
+            <MaterialCommunityIcons name="package-variant" size={48} color={C.muted} />
+            <Text style={s.emptyText}>Aún no hay entregas</Text>
+            <Text style={s.emptySub}>Toca el + para agregar la primera</Text>
+          </View>
+        }
+        ListFooterComponent={
+          <TouchableOpacity
+            style={[s.addRowBtn, { borderRadius: 16, borderWidth: 1, borderColor: C.borderLight, marginTop: 12 }]}
+            onPress={() => store.addRepartoItem(live.id)}
+            testID="btn-add-reparto-item"
+          >
+            <Feather name="plus" size={18} color={C.blue} />
+            <Text style={s.addRowText}>NUEVA ENTREGA</Text>
+          </TouchableOpacity>
+        }
+      />
 
       <View style={s.detailFooter}>
         <View>
@@ -1205,6 +1284,39 @@ function RepartoDetail({
           <Text style={s.footerBtnText}>LISTO</Text>
         </TouchableOpacity>
       </View>
+
+      {/* Edit name modal */}
+      <Modal visible={editingName} transparent animationType="fade" onRequestClose={() => setEditingName(false)}>
+        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={s.modalBackdrop}>
+          <View style={s.modalCard}>
+            <Text style={s.modalTitle}>Nombre del reparto</Text>
+            <TextInput
+              style={s.input}
+              placeholder="Ej. Reparto de cerdo"
+              placeholderTextColor={C.muted}
+              value={nameDraft}
+              onChangeText={setNameDraft}
+              autoFocus
+              testID="input-edit-reparto-name"
+            />
+            <View style={{ flexDirection: "row", gap: 10, marginTop: 14 }}>
+              <TouchableOpacity style={[s.btnGhost, { flex: 1 }]} onPress={() => setEditingName(false)}>
+                <Text style={s.btnGhostText}>Cancelar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[s.btnPrimary, { flex: 1 }]}
+                onPress={() => {
+                  store.updateRepartoDay(live.id, { name: nameDraft.trim() || undefined });
+                  setEditingName(false);
+                }}
+                testID="btn-save-reparto-name"
+              >
+                <Text style={s.btnPrimaryText}>Guardar</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </View>
   );
 }
@@ -1596,12 +1708,6 @@ export default function App() {
           <RepartoList
             data={store.data}
             onSelect={setSelectedReparto}
-            onAdd={async () => {
-              const t = utils.today();
-              const id = await store.addRepartoDay(t);
-              const fresh = store.data.repartos.find((r) => r.id === id);
-              if (fresh) setSelectedReparto(fresh);
-            }}
           />
         )}
         {tab === "cobros" && <CobrosView data={store.data} />}
@@ -1999,6 +2105,62 @@ const makeStyles = (C: ThemeColors) => StyleSheet.create({
     borderRadius: 999,
   },
   statusText: { fontSize: 10, fontWeight: "800", letterSpacing: 1 },
+
+  // Reparto card (drag layout)
+  repartoCard: {
+    flexDirection: "row",
+    alignItems: "stretch",
+    backgroundColor: C.card,
+    borderRadius: 18,
+    padding: 12,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: C.borderLight,
+    gap: 12,
+  },
+  dragHandle: {
+    width: 40,
+    backgroundColor: C.borderLight,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 4,
+  },
+  dragHandleNum: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: C.muted,
+    fontFamily: MONO,
+  },
+  qtyBadge: {
+    backgroundColor: C.borderLight,
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    minWidth: 80,
+  },
+  qtyBadgeLabel: {
+    fontSize: 9,
+    fontWeight: "800",
+    color: C.muted,
+    letterSpacing: 1,
+  },
+  qtyBadgeInput: {
+    fontFamily: MONO,
+    fontSize: 16,
+    fontWeight: "800",
+    color: C.ink,
+    paddingVertical: 0,
+    minWidth: 60,
+  },
+  deleteItemBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: C.redLight,
+    alignItems: "center",
+    justifyContent: "center",
+  },
 
   // Photo modal
   photoModal: {

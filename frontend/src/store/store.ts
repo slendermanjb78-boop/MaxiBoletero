@@ -30,6 +30,7 @@ export interface RepartoItem {
 export interface RepartoDay {
   id: string;
   date: string; // ISO YYYY-MM-DD
+  name?: string; // optional custom label, e.g. "Reparto de cerdo"
   items: RepartoItem[];
 }
 
@@ -286,15 +287,23 @@ export const useStore = () => {
         c.entries = c.entries.filter((e) => e.id !== entryId);
       }),
     // reparto
-    addRepartoDay: async (date: string): Promise<string> => {
-      let existing = inMemory.repartos.find((r) => r.date === date);
-      if (existing) return existing.id;
+    addRepartoDay: async (date: string, name?: string): Promise<string> => {
       const id = uid();
       await update((d) => {
-        d.repartos.push({ id, date, items: [] });
+        d.repartos.push({ id, date, name: name?.trim() || undefined, items: [] });
       });
       return id;
     },
+    updateRepartoDay: (id: string, patch: Partial<RepartoDay>) =>
+      update((d) => {
+        const r = d.repartos.find((x) => x.id === id);
+        if (r) Object.assign(r, patch);
+      }),
+    reorderRepartoItems: (dayId: string, newItems: RepartoItem[]) =>
+      update((d) => {
+        const r = d.repartos.find((x) => x.id === dayId);
+        if (r) r.items = newItems;
+      }),
     deleteRepartoDay: (id: string) =>
       update((d) => {
         d.repartos = d.repartos.filter((r) => r.id !== id);
