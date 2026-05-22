@@ -24,6 +24,7 @@ const stripPhotos = (data: AppData): AppData => ({
     entries: p.entries.map((e) => ({ ...e, photo: null })),
   })),
   repartos: data.repartos.map((r) => ({ ...r })),
+  reminders: (data.reminders || []).map((r) => ({ ...r })),
 });
 
 export const exportBackup = async (
@@ -95,5 +96,6 @@ export const pickAndParseBackup = async (): Promise<BackupFile | null> => {
   ) {
     throw new Error("Estructura del respaldo inválida");
   }
+  if (!Array.isArray(parsed.data.reminders)) parsed.data.reminders = [];
   return parsed;
 };

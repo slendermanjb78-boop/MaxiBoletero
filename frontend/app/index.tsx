@@ -20,13 +20,17 @@ import { MaterialCommunityIcons, Feather } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import * as ImageManipulator from "expo-image-manipulator";
 
-import { useStore, Contact, RepartoDay, utils, AppData } from "@/src/store/store";
+import { useStore, Contact, RepartoDay, Reminder, utils, AppData } from "@/src/store/store";
 import { computeBalance, formatCurrency, formatDateDMY, computeWeekly } from "@/src/utils/calc";
 import { exportAndShareContact } from "@/src/utils/pdf";
 import { exportBackup, pickAndParseBackup } from "@/src/utils/backup";
+import { ensureNotificationPermission, scheduleReminder, cancelReminder } from "@/src/utils/notify";
 import { useTheme, ThemeColors } from "@/src/theme/theme";
+import { GridCellInput, formatThousands, sanitizeDigits } from "@/src/components/GridCellInput";
+import { CameraModal } from "@/src/components/CameraModal";
+import { DateField } from "@/src/components/DateField";
 
-type Tab = "clientes" | "resumen" | "proveedores" | "reparto" | "ajustes";
+type Tab = "clientes" | "resumen" | "proveedores" | "reparto" | "cobros" | "ajustes";
 type Kind = "clients" | "providers";
 
 const MONO = Platform.select({ ios: "Menlo", android: "monospace", default: "monospace" }) as string;
@@ -45,6 +49,7 @@ function BottomTabs({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
     { key: "resumen", label: "RESUMEN", icon: "chart-bar" },
     { key: "proveedores", label: "PROVEED.", icon: "truck" },
     { key: "reparto", label: "REPARTO", icon: "map-marker-radius" },
+    { key: "cobros", label: "COBROS", icon: "bell-ring-outline" },
     { key: "ajustes", label: "AJUSTES", icon: "cog" },
   ];
   return (
@@ -217,8 +222,7 @@ function LedgerDetail({
   const { C, s } = useUI();
   const store = useStore();
   const [photoUri, setPhotoUri] = useState<string | null>(null);
-  const [datePickerFor, setDatePickerFor] = useState<string | null>(null);
-  const [tempDate, setTempDate] = useState<string>("");
+  const [cameraForEntry, setCameraForEntry] = useState<string | null>(null);
   const [sharing, setSharing] = useState(false);
 
   // re-fetch updated contact reference from store
@@ -231,56 +235,37 @@ function LedgerDetail({
   const statusColor =
     bal.status === "DEBE" ? C.red : bal.status === "A_FAVOR" ? C.blue : C.green;
 
-  const takePhoto = async (entryId: string) => {
-    // Compress + resize helper: max 800px wide, JPEG 60%, output as base64 data URI
-    const compress = async (uri: string): Promise<string> => {
-      try {
-        const result = await ImageManipulator.manipulateAsync(
-          uri,
-          [{ resize: { width: 800 } }],
-          {
-            compress: 0.6,
-            format: ImageManipulator.SaveFormat.JPEG,
-            base64: true,
-          },
-        );
-        if (result.base64) return `data:image/jpeg;base64,${result.base64}`;
-        return result.uri;
-      } catch {
-        return uri;
-      }
-    };
-
+  // openCamera: opens in-app camera component (no native picker → no app kill)
+  const openCamera = (entryId: string) => setCameraForEntry(entryId);
+  const handleCapture = (dataUri: string) => {
+    if (cameraForEntry) {
+      store.updateEntry(kind, liveContact.id, cameraForEntry, { photo: dataUri });
+    }
+  };
+  // pickFromGallery: fallback for web/no-camera devices
+  const pickFromGallery = async (entryId: string) => {
     try {
-      const perm = await ImagePicker.requestCameraPermissionsAsync();
-      if (!perm.granted) {
-        const lib = await ImagePicker.requestMediaLibraryPermissionsAsync();
-        if (!lib.granted) {
-          Alert.alert(
-            "Permisos requeridos",
-            "Habilita el acceso a la cámara o galería desde los ajustes para adjuntar evidencias.",
-          );
-          return;
-        }
-        const r = await ImagePicker.launchImageLibraryAsync({
-          quality: 1,
-          mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        });
-        if (!r.canceled && r.assets[0]) {
-          const compressed = await compress(r.assets[0].uri);
-          store.updateEntry(kind, liveContact.id, entryId, { photo: compressed });
-        }
+      const lib = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!lib.granted) {
+        Alert.alert("Permiso requerido", "Permite el acceso a la galería para elegir una foto.");
         return;
       }
-      const r = await ImagePicker.launchCameraAsync({
+      const r = await ImagePicker.launchImageLibraryAsync({
         quality: 1,
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
       });
       if (!r.canceled && r.assets[0]) {
-        const compressed = await compress(r.assets[0].uri);
-        store.updateEntry(kind, liveContact.id, entryId, { photo: compressed });
+        const out = await ImageManipulator.manipulateAsync(
+          r.assets[0].uri,
+          [{ resize: { width: 800 } }],
+          { compress: 0.6, format: ImageManipulator.SaveFormat.JPEG, base64: true },
+        );
+        if (out.base64) {
+          store.updateEntry(kind, liveContact.id, entryId, { photo: `data:image/jpeg;base64,${out.base64}` });
+        }
       }
-    } catch (e) {
-      Alert.alert("Error", "No se pudo capturar la foto");
+    } catch (e: any) {
+      Alert.alert("Error", e?.message || "No se pudo seleccionar la imagen");
     }
   };
 
@@ -314,8 +299,8 @@ function LedgerDetail({
   };
 
   const openDate = (entryId: string, current: string) => {
-    setDatePickerFor(entryId);
-    setTempDate(current || utils.today());
+    // legacy stub kept to avoid breaking older references; not used anymore
+    void entryId; void current;
   };
 
   return (
@@ -377,22 +362,27 @@ function LedgerDetail({
             {/* Rows */}
             {liveContact.entries.map((e) => (
               <View key={e.id} style={s.gridRow}>
-                <TouchableOpacity
-                  style={[s.cellDate, s.bodyCell]}
-                  onPress={() => openDate(e.id, e.date)}
-                  testID={`cell-date-${e.id}`}
-                >
-                  <Text style={s.cellText}>{formatDateDMY(e.date) || "—"}</Text>
+                <View style={[s.cellDate, s.bodyCell]}>
+                  <DateField
+                    value={e.date ? new Date(e.date + "T00:00:00") : new Date()}
+                    onChange={(d) => {
+                      const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+                      store.updateEntry(kind, liveContact.id, e.id, { date: iso });
+                    }}
+                    style={{ flexDirection: "row", alignItems: "center", gap: 6 }}
+                    textStyle={s.cellText}
+                    testID={`cell-date-${e.id}`}
+                  />
                   <Feather name="calendar" size={13} color={C.muted} />
-                </TouchableOpacity>
+                </View>
 
                 <View style={[s.cellDetail, s.bodyCell]}>
-                  <TextInput
+                  <GridCellInput
                     style={s.cellInput}
                     placeholder="Concepto..."
                     placeholderTextColor={C.muted}
-                    value={e.description}
-                    onChangeText={(t) =>
+                    initialValue={e.description}
+                    onCommit={(t) =>
                       store.updateEntry(kind, liveContact.id, e.id, { description: t })
                     }
                     testID={`input-desc-${e.id}`}
@@ -400,13 +390,15 @@ function LedgerDetail({
                 </View>
 
                 <View style={[s.cellNum, s.bodyCell]}>
-                  <TextInput
-                    style={[s.cellInputNum]}
+                  <GridCellInput
+                    style={s.cellInputNum}
                     placeholder="0"
                     placeholderTextColor={C.muted}
                     keyboardType="numeric"
-                    value={e.debe ? String(e.debe) : ""}
-                    onChangeText={(t) =>
+                    initialValue={e.debe ? String(e.debe) : ""}
+                    sanitize={sanitizeDigits}
+                    format={formatThousands}
+                    onCommit={(t) =>
                       store.updateEntry(kind, liveContact.id, e.id, {
                         debe: Number(t.replace(/[^0-9]/g, "")) || 0,
                       })
@@ -416,13 +408,15 @@ function LedgerDetail({
                 </View>
 
                 <View style={[s.cellNum, s.bodyCell]}>
-                  <TextInput
-                    style={[s.cellInputNum]}
+                  <GridCellInput
+                    style={s.cellInputNum}
                     placeholder="0"
                     placeholderTextColor={C.muted}
                     keyboardType="numeric"
-                    value={e.haber ? String(e.haber) : ""}
-                    onChangeText={(t) =>
+                    initialValue={e.haber ? String(e.haber) : ""}
+                    sanitize={sanitizeDigits}
+                    format={formatThousands}
+                    onCommit={(t) =>
                       store.updateEntry(kind, liveContact.id, e.id, {
                         haber: Number(t.replace(/[^0-9]/g, "")) || 0,
                       })
@@ -463,7 +457,8 @@ function LedgerDetail({
                 <View style={[s.cellPhoto, s.bodyCell, { flexDirection: "row", justifyContent: "center", gap: 6 }]}>
                   <TouchableOpacity
                     style={s.photoBtn}
-                    onPress={() => takePhoto(e.id)}
+                    onPress={() => openCamera(e.id)}
+                    onLongPress={() => pickFromGallery(e.id)}
                     testID={`btn-camera-${e.id}`}
                   >
                     <Feather name="camera" size={15} color={C.ink} />
@@ -557,60 +552,12 @@ function LedgerDetail({
         </View>
       </Modal>
 
-      {/* Simple date picker (text entry YYYY-MM-DD) */}
-      <Modal
-        visible={!!datePickerFor}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setDatePickerFor(null)}
-      >
-        <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
-          style={s.modalBackdrop}
-        >
-          <View style={s.modalCard}>
-            <Text style={s.modalTitle}>Fecha</Text>
-            <Text style={{ color: C.muted, fontSize: 12, marginBottom: 8 }}>
-              Formato AAAA-MM-DD (vacío = hoy)
-            </Text>
-            <TextInput
-              style={s.input}
-              value={tempDate}
-              onChangeText={setTempDate}
-              placeholder="AAAA-MM-DD"
-              placeholderTextColor="#94a3b8"
-              autoFocus
-              testID="input-date"
-            />
-            <View style={{ flexDirection: "row", gap: 10, marginTop: 14 }}>
-              <TouchableOpacity
-                style={[s.btnGhost, { flex: 1 }]}
-                onPress={() => setDatePickerFor(null)}
-              >
-                <Text style={s.btnGhostText}>Cancelar</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[s.btnPrimary, { flex: 1 }]}
-                testID="btn-confirm-date"
-                onPress={() => {
-                  const value =
-                    /^\d{4}-\d{2}-\d{2}$/.test(tempDate.trim())
-                      ? tempDate.trim()
-                      : utils.today();
-                  if (datePickerFor) {
-                    store.updateEntry(kind, liveContact.id, datePickerFor, {
-                      date: value,
-                    });
-                  }
-                  setDatePickerFor(null);
-                }}
-              >
-                <Text style={s.btnPrimaryText}>Guardar</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
+      {/* In-app Camera */}
+      <CameraModal
+        visible={!!cameraForEntry}
+        onClose={() => setCameraForEntry(null)}
+        onCapture={handleCapture}
+      />
     </View>
   );
 }
@@ -1139,37 +1086,38 @@ function RepartoDetail({
                   </TouchableOpacity>
                 </View>
                 <View style={[s.rcellName, s.bodyCell]}>
-                  <TextInput
+                  <GridCellInput
                     style={s.cellInput}
                     placeholder="Nombre"
                     placeholderTextColor={C.muted}
-                    value={it.clientName}
-                    onChangeText={(t) =>
+                    initialValue={it.clientName}
+                    onCommit={(t) =>
                       store.updateRepartoItem(live.id, it.id, { clientName: t })
                     }
                     testID={`reparto-input-name-${it.id}`}
                   />
                 </View>
                 <View style={[s.rcellProd, s.bodyCell]}>
-                  <TextInput
+                  <GridCellInput
                     style={s.cellInput}
                     placeholder="Detalle producto"
                     placeholderTextColor={C.muted}
-                    value={it.productDetail}
-                    onChangeText={(t) =>
+                    initialValue={it.productDetail}
+                    onCommit={(t) =>
                       store.updateRepartoItem(live.id, it.id, { productDetail: t })
                     }
                   />
                 </View>
                 <View style={[s.rcellQty, s.bodyCell]}>
-                  <TextInput
+                  <GridCellInput
                     style={s.cellInputNum}
                     placeholder="0"
                     placeholderTextColor={C.muted}
                     keyboardType="numeric"
-                    value={it.quantity}
-                    onChangeText={(t) =>
-                      store.updateRepartoItem(live.id, it.id, { quantity: t.replace(/[^0-9]/g, "") })
+                    initialValue={it.quantity}
+                    sanitize={sanitizeDigits}
+                    onCommit={(t) =>
+                      store.updateRepartoItem(live.id, it.id, { quantity: t })
                     }
                   />
                 </View>
@@ -1232,6 +1180,305 @@ function RepartoDetail({
     </View>
   );
 }
+
+// ---------- Cobros (Avisos de Cobro) ----------
+function CobrosView({
+  data,
+}: {
+  data: ReturnType<typeof useStore>["data"];
+}) {
+  const { C, s } = useUI();
+  const store = useStore();
+  const [showForm, setShowForm] = useState(false);
+  const [concept, setConcept] = useState("");
+  const [amount, setAmount] = useState("");
+  const [dueDate, setDueDate] = useState<Date>(() => {
+    const d = new Date();
+    d.setMinutes(d.getMinutes() + 60);
+    d.setSeconds(0);
+    return d;
+  });
+  const [saving, setSaving] = useState(false);
+
+  const closeForm = () => {
+    setShowForm(false);
+    setConcept("");
+    setAmount("");
+  };
+
+  const submit = async () => {
+    const trimmedConcept = concept.trim();
+    const amountNum = Number(amount.replace(/[^0-9]/g, "")) || 0;
+    if (!trimmedConcept) {
+      Alert.alert("Falta el concepto", "Indica a quién o por qué hay que cobrar.");
+      return;
+    }
+    if (dueDate.getTime() < Date.now() + 30 * 1000) {
+      Alert.alert("Fecha inválida", "La fecha debe ser al menos 30 segundos en el futuro.");
+      return;
+    }
+    setSaving(true);
+    try {
+      const granted = await ensureNotificationPermission();
+      let notifId: string | null = null;
+      if (granted) {
+        notifId = await scheduleReminder(trimmedConcept, amountNum, dueDate.toISOString());
+      }
+      store.addReminder({
+        concept: trimmedConcept,
+        amount: amountNum,
+        dueAt: dueDate.toISOString(),
+        notificationId: notifId,
+      });
+      if (!granted && Platform.OS !== "web") {
+        Alert.alert(
+          "Aviso guardado",
+          "No se pudo activar la notificación porque los permisos están denegados. Habilítalos desde los ajustes del sistema.",
+        );
+      }
+      closeForm();
+    } catch (e: any) {
+      Alert.alert("Error", e?.message || "No se pudo crear el aviso");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = (r: Reminder) => {
+    Alert.alert("Eliminar aviso", `¿Eliminar el aviso "${r.concept}"?`, [
+      { text: "Cancelar", style: "cancel" },
+      {
+        text: "Eliminar",
+        style: "destructive",
+        onPress: async () => {
+          await cancelReminder(r.notificationId);
+          store.deleteReminder(r.id);
+        },
+      },
+    ]);
+  };
+
+  const handleToggleDone = async (r: Reminder) => {
+    if (!r.done) {
+      await cancelReminder(r.notificationId);
+      store.updateReminder(r.id, { done: true, notificationId: null });
+    } else {
+      store.updateReminder(r.id, { done: false });
+    }
+  };
+
+  const sorted = [...data.reminders].sort((a, b) => a.dueAt.localeCompare(b.dueAt));
+  const pending = sorted.filter((r) => !r.done);
+  const done = sorted.filter((r) => r.done);
+
+  const formatDue = (iso: string) => {
+    const d = new Date(iso);
+    const dd = String(d.getDate()).padStart(2, "0");
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    const yy = d.getFullYear();
+    const hh = String(d.getHours()).padStart(2, "0");
+    const min = String(d.getMinutes()).padStart(2, "0");
+    return `${dd}/${mm}/${yy} · ${hh}:${min}`;
+  };
+
+  return (
+    <View style={{ flex: 1 }}>
+      <View style={s.screenHeader}>
+        <Text style={s.screenTitle}>Avisos de Cobro</Text>
+        <Text style={s.screenSubtitle}>Recordatorios programados</Text>
+      </View>
+
+      <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 160 }}>
+        {pending.length === 0 && done.length === 0 ? (
+          <View style={s.empty}>
+            <MaterialCommunityIcons name="bell-ring-outline" size={48} color={C.muted} />
+            <Text style={s.emptyText}>Sin avisos cargados</Text>
+            <Text style={s.emptySub}>Toca el + para crear el primero</Text>
+          </View>
+        ) : null}
+
+        {pending.length > 0 && (
+          <Text style={[s.statTitle, { marginTop: 4, marginBottom: 8 }]}>
+            PENDIENTES ({pending.length})
+          </Text>
+        )}
+        {pending.map((r) => {
+          const overdue = new Date(r.dueAt).getTime() < Date.now();
+          return (
+            <View key={r.id} style={s.contactCard} testID={`reminder-${r.id}`}>
+              <View style={[s.avatar, { backgroundColor: overdue ? C.redLight : C.blueLight }]}>
+                <MaterialCommunityIcons
+                  name={overdue ? "alert" : "bell-ring"}
+                  size={22}
+                  color={overdue ? C.red : C.blue}
+                />
+              </View>
+              <View style={{ flex: 1, marginLeft: 14 }}>
+                <Text style={s.contactName}>{r.concept}</Text>
+                <Text style={s.contactMeta}>
+                  {formatDue(r.dueAt)}
+                  {overdue ? " · VENCIDO" : ""}
+                </Text>
+              </View>
+              <View style={{ alignItems: "flex-end", gap: 6 }}>
+                <Text style={[s.contactAmount, { color: C.blue }]}>
+                  {formatCurrency(r.amount)}
+                </Text>
+                <View style={{ flexDirection: "row", gap: 6 }}>
+                  <TouchableOpacity
+                    onPress={() => handleToggleDone(r)}
+                    style={[s.orderBtn, { width: 28, height: 28, backgroundColor: C.greenLight }]}
+                    testID={`reminder-done-${r.id}`}
+                  >
+                    <Feather name="check" size={14} color={C.green} />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => handleDelete(r)}
+                    style={[s.orderBtn, { width: 28, height: 28, backgroundColor: C.redLight }]}
+                    testID={`reminder-delete-${r.id}`}
+                  >
+                    <Feather name="trash-2" size={14} color={C.red} />
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          );
+        })}
+
+        {done.length > 0 && (
+          <Text style={[s.statTitle, { marginTop: 12, marginBottom: 8 }]}>
+            COBRADOS ({done.length})
+          </Text>
+        )}
+        {done.map((r) => (
+          <View key={r.id} style={[s.contactCard, { opacity: 0.65 }]} testID={`reminder-${r.id}`}>
+            <View style={[s.avatar, { backgroundColor: C.greenLight }]}>
+              <MaterialCommunityIcons name="check-circle" size={22} color={C.green} />
+            </View>
+            <View style={{ flex: 1, marginLeft: 14 }}>
+              <Text style={[s.contactName, { textDecorationLine: "line-through" }]}>
+                {r.concept}
+              </Text>
+              <Text style={s.contactMeta}>{formatDue(r.dueAt)}</Text>
+            </View>
+            <View style={{ alignItems: "flex-end", gap: 6 }}>
+              <Text style={[s.contactAmount, { color: C.green }]}>
+                {formatCurrency(r.amount)}
+              </Text>
+              <View style={{ flexDirection: "row", gap: 6 }}>
+                <TouchableOpacity
+                  onPress={() => handleToggleDone(r)}
+                  style={[s.orderBtn, { width: 28, height: 28, backgroundColor: C.borderLight }]}
+                >
+                  <Feather name="rotate-ccw" size={14} color={C.ink} />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => handleDelete(r)}
+                  style={[s.orderBtn, { width: 28, height: 28, backgroundColor: C.redLight }]}
+                >
+                  <Feather name="trash-2" size={14} color={C.red} />
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        ))}
+      </ScrollView>
+
+      <TouchableOpacity
+        style={s.fab}
+        onPress={() => setShowForm(true)}
+        testID="fab-add-reminder"
+      >
+        <Feather name="plus" size={26} color="#fff" />
+      </TouchableOpacity>
+
+      <Modal visible={showForm} transparent animationType="slide" onRequestClose={closeForm}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={s.modalBackdrop}
+        >
+          <View style={s.modalCard}>
+            <Text style={s.modalTitle}>Nuevo aviso de cobro</Text>
+
+            <Text style={[s.statRowLabel, { marginBottom: 6, marginTop: 6 }]}>Concepto / Cliente</Text>
+            <TextInput
+              style={s.input}
+              placeholder="Ej. Juan Pérez · saldo mayorista"
+              placeholderTextColor={C.muted}
+              value={concept}
+              onChangeText={setConcept}
+              testID="input-reminder-concept"
+            />
+
+            <Text style={[s.statRowLabel, { marginBottom: 6, marginTop: 12 }]}>Monto</Text>
+            <TextInput
+              style={s.input}
+              placeholder="0"
+              placeholderTextColor={C.muted}
+              keyboardType="numeric"
+              value={formatThousands(amount)}
+              onChangeText={(t) => setAmount(sanitizeDigits(t))}
+              testID="input-reminder-amount"
+            />
+
+            <Text style={[s.statRowLabel, { marginBottom: 6, marginTop: 12 }]}>
+              Fecha y hora del aviso
+            </Text>
+            <View style={{ flexDirection: "row", gap: 10 }}>
+              <DateField
+                value={dueDate}
+                mode="date"
+                onChange={(d) => {
+                  const nd = new Date(dueDate);
+                  nd.setFullYear(d.getFullYear(), d.getMonth(), d.getDate());
+                  setDueDate(nd);
+                }}
+                minimumDate={new Date()}
+                style={[s.input, { flex: 1, paddingVertical: 14, justifyContent: "center" }]}
+                textStyle={{ color: C.ink, fontWeight: "700" }}
+                testID="input-reminder-date"
+              />
+              <DateField
+                value={dueDate}
+                mode="time"
+                onChange={(d) => {
+                  const nd = new Date(dueDate);
+                  nd.setHours(d.getHours(), d.getMinutes(), 0, 0);
+                  setDueDate(nd);
+                }}
+                style={[s.input, { flex: 1, paddingVertical: 14, justifyContent: "center" }]}
+                textStyle={{ color: C.ink, fontWeight: "700" }}
+                testID="input-reminder-time"
+              />
+            </View>
+
+            <View style={{ flexDirection: "row", gap: 10, marginTop: 18 }}>
+              <TouchableOpacity
+                style={[s.btnGhost, { flex: 1 }]}
+                onPress={closeForm}
+              >
+                <Text style={s.btnGhostText}>Cancelar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[s.btnPrimary, { flex: 1 }]}
+                onPress={submit}
+                disabled={saving}
+                testID="btn-confirm-reminder"
+              >
+                {saving ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={s.btnPrimaryText}>Crear aviso</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+    </View>
+  );
+}
+
 
 // ---------- Root ----------
 export default function App() {
@@ -1325,6 +1572,7 @@ export default function App() {
             }}
           />
         )}
+        {tab === "cobros" && <CobrosView data={store.data} />}
         {tab === "ajustes" && (
           <SettingsView
             data={store.data}

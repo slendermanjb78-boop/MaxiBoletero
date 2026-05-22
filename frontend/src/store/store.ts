@@ -33,10 +33,21 @@ export interface RepartoDay {
   items: RepartoItem[];
 }
 
+export interface Reminder {
+  id: string;
+  concept: string; // cliente/concepto
+  amount: number;
+  dueAt: string; // ISO datetime
+  notificationId?: string | null;
+  done: boolean;
+  createdAt: string;
+}
+
 export interface AppData {
   clients: Contact[];
   providers: Contact[];
   repartos: RepartoDay[];
+  reminders: Reminder[];
 }
 
 const STORAGE_KEY = "erp_contable_data_v1";
@@ -146,10 +157,11 @@ const seedData = (): AppData => {
         ],
       },
     ],
+    reminders: [],
   };
 };
 
-const empty: AppData = { clients: [], providers: [], repartos: [] };
+const empty: AppData = { clients: [], providers: [], repartos: [], reminders: [] };
 
 let inMemory: AppData = empty;
 const listeners = new Set<() => void>();
@@ -203,9 +215,29 @@ export const useStore = () => {
     loaded,
     replaceAll: (next: AppData) =>
       update((d) => {
-        d.clients = next.clients;
-        d.providers = next.providers;
-        d.repartos = next.repartos;
+        d.clients = next.clients || [];
+        d.providers = next.providers || [];
+        d.repartos = next.repartos || [];
+        d.reminders = next.reminders || [];
+      }),
+    // reminders
+    addReminder: (r: Omit<Reminder, "id" | "createdAt" | "done">) =>
+      update((d) => {
+        d.reminders.push({
+          id: uid(),
+          createdAt: new Date().toISOString(),
+          done: false,
+          ...r,
+        });
+      }),
+    updateReminder: (id: string, patch: Partial<Reminder>) =>
+      update((d) => {
+        const r = d.reminders.find((x) => x.id === id);
+        if (r) Object.assign(r, patch);
+      }),
+    deleteReminder: (id: string) =>
+      update((d) => {
+        d.reminders = d.reminders.filter((r) => r.id !== id);
       }),
     // contacts
     addContact: (kind: "clients" | "providers", name: string) =>
@@ -311,3 +343,4 @@ export const useStore = () => {
 };
 
 export const utils = { uid, today };
+
