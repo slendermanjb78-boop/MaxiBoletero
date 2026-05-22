@@ -1151,9 +1151,9 @@ function RepartoDetail({
             <Text style={s.dragHandleNum}>{(idx ?? 0) + 1}</Text>
           </TouchableOpacity>
 
-          <View style={{ flex: 1, gap: 6 }}>
+          <View style={{ flex: 1, gap: 4 }}>
             <GridCellInput
-              style={[s.cellInput, { fontSize: 15, fontWeight: "700", color: C.ink }]}
+              style={[s.cellInput, { fontSize: 14, fontWeight: "700", color: C.ink, paddingVertical: 2 }]}
               placeholder="Nombre del cliente"
               placeholderTextColor={C.muted}
               initialValue={item.clientName}
@@ -1161,13 +1161,13 @@ function RepartoDetail({
               testID={`reparto-input-name-${item.id}`}
             />
             <GridCellInput
-              style={[s.cellInput, { fontSize: 13, color: C.text }]}
+              style={[s.cellInput, { fontSize: 12, color: C.text, paddingVertical: 2 }]}
               placeholder="Detalle del producto"
               placeholderTextColor={C.muted}
               initialValue={item.productDetail}
               onCommit={(t) => store.updateRepartoItem(live.id, item.id, { productDetail: t })}
             />
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginTop: 2 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 4 }}>
               <View style={s.qtyBadge}>
                 <Text style={s.qtyBadgeLabel}>CANT.</Text>
                 <GridCellInput
@@ -1187,25 +1187,35 @@ function RepartoDetail({
                 testID={`reparto-toggle-${item.id}`}
                 style={[
                   s.statusPill,
-                  { backgroundColor: item.delivered ? C.greenLight : C.redLight, paddingVertical: 8 },
+                  {
+                    backgroundColor: item.delivered ? C.greenLight : C.redLight,
+                    paddingVertical: 6,
+                    paddingHorizontal: 10,
+                    flex: 1,
+                    justifyContent: "center",
+                  },
                 ]}
               >
                 <MaterialCommunityIcons
                   name={item.delivered ? "check-circle" : "close-circle"}
-                  size={16}
+                  size={14}
                   color={item.delivered ? C.green : C.red}
                 />
-                <Text style={[s.statusText, { color: item.delivered ? C.green : C.red }]}>
+                <Text
+                  style={[
+                    s.statusText,
+                    { color: item.delivered ? C.green : C.red, fontSize: 10 },
+                  ]}
+                >
                   {item.delivered ? "ENTREGADO" : "PENDIENTE"}
                 </Text>
               </TouchableOpacity>
-              <View style={{ flex: 1 }} />
               <TouchableOpacity
                 onPress={() => store.deleteRepartoItem(live.id, item.id)}
                 style={s.deleteItemBtn}
                 testID={`reparto-del-${item.id}`}
               >
-                <Feather name="trash-2" size={16} color={C.red} />
+                <Feather name="trash-2" size={14} color={C.red} />
               </TouchableOpacity>
             </View>
           </View>
@@ -2112,51 +2122,53 @@ const makeStyles = (C: ThemeColors) => StyleSheet.create({
     alignItems: "stretch",
     backgroundColor: C.card,
     borderRadius: 18,
-    padding: 12,
+    padding: 10,
     marginBottom: 10,
     borderWidth: 1,
     borderColor: C.borderLight,
-    gap: 12,
+    gap: 10,
   },
   dragHandle: {
-    width: 40,
+    width: 32,
     backgroundColor: C.borderLight,
-    borderRadius: 12,
+    borderRadius: 10,
     alignItems: "center",
     justifyContent: "center",
-    gap: 4,
+    gap: 2,
   },
   dragHandleNum: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: "800",
     color: C.muted,
     fontFamily: MONO,
   },
   qtyBadge: {
     backgroundColor: C.borderLight,
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    minWidth: 80,
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    minWidth: 50,
+    alignItems: "center",
   },
   qtyBadgeLabel: {
-    fontSize: 9,
+    fontSize: 8,
     fontWeight: "800",
     color: C.muted,
-    letterSpacing: 1,
+    letterSpacing: 0.8,
   },
   qtyBadgeInput: {
     fontFamily: MONO,
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: "800",
     color: C.ink,
     paddingVertical: 0,
-    minWidth: 60,
+    minWidth: 34,
+    textAlign: "center",
   },
   deleteItemBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
+    width: 30,
+    height: 30,
+    borderRadius: 8,
     backgroundColor: C.redLight,
     alignItems: "center",
     justifyContent: "center",
