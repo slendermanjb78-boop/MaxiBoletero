@@ -224,6 +224,7 @@ export const useStore = () => {
     // reminders
     addReminder: (r: Omit<Reminder, "id" | "createdAt" | "done">) =>
       update((d) => {
+        if (!Array.isArray(d.reminders)) d.reminders = [];
         d.reminders.push({
           id: uid(),
           createdAt: new Date().toISOString(),
@@ -233,11 +234,13 @@ export const useStore = () => {
       }),
     updateReminder: (id: string, patch: Partial<Reminder>) =>
       update((d) => {
+        if (!Array.isArray(d.reminders)) d.reminders = [];
         const r = d.reminders.find((x) => x.id === id);
         if (r) Object.assign(r, patch);
       }),
     deleteReminder: (id: string) =>
       update((d) => {
+        if (!Array.isArray(d.reminders)) d.reminders = [];
         d.reminders = d.reminders.filter((r) => r.id !== id);
       }),
     // contacts

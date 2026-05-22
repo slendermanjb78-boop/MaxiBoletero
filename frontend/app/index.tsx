@@ -1420,7 +1420,7 @@ function CobrosView({
     }
   };
 
-  const sorted = [...data.reminders].sort((a, b) => a.dueAt.localeCompare(b.dueAt));
+  const sorted = [...(data.reminders || [])].sort((a, b) => a.dueAt.localeCompare(b.dueAt));
   const pending = sorted.filter((r) => !r.done);
   const done = sorted.filter((r) => r.done);
 
