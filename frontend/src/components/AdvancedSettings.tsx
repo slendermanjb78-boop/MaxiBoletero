@@ -11,11 +11,7 @@ import {
 } from "react-native";
 import Slider from "@react-native-community/slider";
 import { MaterialCommunityIcons, Feather } from "@expo/vector-icons";
-import * as DocumentPicker from "expo-document-picker";
-import * as FileSystem from "expo-file-system/legacy";
-import { createAudioPlayer } from "expo-audio";
 
-import { ensureToneChannel } from "@/src/utils/notify";
 import {
   useTheme,
   ThemeColors,
@@ -25,15 +21,67 @@ import {
   NotificationTone,
 } from "@/src/theme/theme";
 
+// Lazy native modules — required ONLY when the user opens the tone picker,
+// never at app startup. Keeps the cold start safe even if a native module
+// fails to load (the rest of the app still runs).
+const lazyDocPicker = () => {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    return require("expo-document-picker");
+  } catch {
+    return null;
+  }
+};
+const lazyFS = () => {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    return require("expo-file-system/legacy");
+  } catch {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      return require("expo-file-system");
+    } catch {
+      return null;
+    }
+  }
+};
+const lazyAudio = () => {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    return require("expo-audio");
+  } catch {
+    return null;
+  }
+};
+const lazyNotify = () => {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    return require("@/src/utils/notify");
+  } catch {
+    return null;
+  }
+};
+
+const documentDirectory = (): string => {
+  try {
+    return lazyFS()?.documentDirectory || "";
+  } catch {
+    return "";
+  }
+};
+
 // Local copy of picked audio (we keep it in app's documentDirectory so the
-// URI stays valid across launches).
-const AUDIO_DIR = (FileSystem.documentDirectory || "") + "tones/";
+// URI stays valid across launches). Computed lazily.
+const audioDir = () => documentDirectory() + "tones/";
 
 const ensureDir = async () => {
   try {
-    const info = await FileSystem.getInfoAsync(AUDIO_DIR);
+    const fs = lazyFS();
+    if (!fs?.getInfoAsync) return;
+    const dir = audioDir();
+    const info = await fs.getInfoAsync(dir);
     if (!info.exists) {
-      await FileSystem.makeDirectoryAsync(AUDIO_DIR, { intermediates: true });
+      await fs.makeDirectoryAsync(dir, { intermediates: true });
     }
   } catch {}
 };
@@ -191,10 +239,18 @@ function TonePicker({
     activePlayerRef.current = null;
 
     try {
-      const p = createAudioPlayer({ uri: tone.uri });
+      const Audio = lazyAudio();
+      if (!Audio?.createAudioPlayer) {
+        Alert.alert(
+          "Audio no disponible",
+          "El módulo de audio no se pudo cargar en este dispositivo.",
+        );
+        return;
+      }
+      const p = Audio.createAudioPlayer({ uri: tone.uri });
       activePlayerRef.current = p;
       try { p.seekTo(0); } catch {}
-      p.play();
+      try { p.play(); } catch {}
       setTimeout(() => {
         try { p.pause(); p.remove?.(); } catch {}
         if (activePlayerRef.current === p) activePlayerRef.current = null;
@@ -207,6 +263,12 @@ function TonePicker({
   const pickFile = async () => {
     try {
       setPicking(true);
+      const DocumentPicker = lazyDocPicker();
+      if (!DocumentPicker?.getDocumentAsync) {
+        setPicking(false);
+        Alert.alert("No disponible", "El selector de archivos no se pudo cargar.");
+        return;
+      }
       const res = await DocumentPicker.getDocumentAsync({
         type: "audio/*",
         copyToCacheDirectory: true,
@@ -223,10 +285,13 @@ function TonePicker({
       // Persist a copy inside app's documents to keep URI valid
       let finalUri = srcUri;
       try {
-        await ensureDir();
-        const dest = AUDIO_DIR + Date.now() + "_" + name;
-        await FileSystem.copyAsync({ from: srcUri, to: dest });
-        finalUri = dest;
+        const fs = lazyFS();
+        if (fs?.copyAsync) {
+          await ensureDir();
+          const dest = audioDir() + Date.now() + "_" + name;
+          await fs.copyAsync({ from: srcUri, to: dest });
+          finalUri = dest;
+        }
       } catch {
         // fallback to original URI if copy fails (still usable while session lasts)
       }
@@ -234,7 +299,10 @@ function TonePicker({
       // Recreate Android notification channel pointing to the new sound URI
       // so the system plays it when an aviso fires (even in background).
       try {
-        await ensureToneChannel(finalUri, asset.name || name);
+        const notify = lazyNotify();
+        if (notify?.ensureToneChannel) {
+          await notify.ensureToneChannel(finalUri, asset.name || name);
+        }
       } catch {}
       setPicking(false);
     } catch (e: any) {
@@ -246,7 +314,10 @@ function TonePicker({
   const clearTone = async () => {
     onChange({ uri: null, name: "Sonido del sistema" });
     try {
-      await ensureToneChannel(null, "");
+      const notify = lazyNotify();
+      if (notify?.ensureToneChannel) {
+        await notify.ensureToneChannel(null, "");
+      }
     } catch {}
   };
 
