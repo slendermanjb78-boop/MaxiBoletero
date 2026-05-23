@@ -10,6 +10,7 @@
     "newArchEnabled": false,
     "ios": {
       "supportsTablet": true,
+      "bundleIdentifier": "com.maxi.maxiboletero",
       "infoPlist": {
         "NSCameraUsageDescription": "Adjuntar evidencias fotográficas de operaciones",
         "NSPhotoLibraryUsageDescription": "Seleccionar fotos como evidencia de operaciones",
@@ -17,6 +18,7 @@
       }
     },
     "android": {
+      "package": "com.maxi.maxiboletero",
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#1e5a91"
@@ -25,14 +27,11 @@
       "permissions": [
         "android.permission.CAMERA",
         "android.permission.READ_EXTERNAL_STORAGE",
-        "android.permission.WRITE_EXTERNAL_STORAGE",
-        "android.permission.RECORD_AUDIO",
         "android.permission.POST_NOTIFICATIONS",
         "android.permission.SCHEDULE_EXACT_ALARM",
         "android.permission.VIBRATE",
         "android.permission.WAKE_LOCK",
-        "android.permission.RECEIVE_BOOT_COMPLETED",
-        "android.permission.ACCESS_NOTIFICATION_POLICY"
+        "android.permission.RECEIVE_BOOT_COMPLETED"
       ]
     },
     "web": {
@@ -61,26 +60,17 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "Capturar evidencias fotográficas dentro de la app",
-          "microphonePermission": false,
-          "recordAudioAndroid": false
+          "cameraPermission": "Capturar evidencias fotográficas dentro de la app"
         }
       ],
       [
         "expo-notifications",
         {
-          "icon": "./assets/images/notification-icon.png",
-          "color": "#ffffff",
-          "defaultChannel": "cobros"
+          "icon": "./assets/notification-icon.png",
+          "color": "#ffffff"
         }
       ],
-      "@react-native-community/datetimepicker",
-      [
-        "expo-audio",
-        {
-          "microphonePermission": false
-        }
-      ]
+      "@react-native-community/datetimepicker"
     ],
     "experiments": {
       "typedRoutes": true

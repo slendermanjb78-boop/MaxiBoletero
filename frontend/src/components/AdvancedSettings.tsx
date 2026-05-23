@@ -48,7 +48,7 @@ const lazyFS = () => {
 const lazyAudio = () => {
   try {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
-    return require("expo-audio");
+    return require("expo-av");
   } catch {
     return null;
   }
@@ -215,11 +215,13 @@ function TonePicker({
   // Make sure we stop & free any leftover player on unmount.
   useEffect(() => {
     return () => {
-      try {
-        activePlayerRef.current?.pause?.();
-        activePlayerRef.current?.remove?.();
-      } catch {}
-      activePlayerRef.current = null;
+      (async () => {
+        try {
+          await activePlayerRef.current?.stopAsync?.();
+          await activePlayerRef.current?.unloadAsync?.();
+        } catch {}
+        activePlayerRef.current = null;
+      })();
     };
   }, []);
 
@@ -233,27 +235,31 @@ function TonePicker({
     }
     // Tear down any previous player first
     try {
-      activePlayerRef.current?.pause?.();
-      activePlayerRef.current?.remove?.();
+      await activePlayerRef.current?.stopAsync?.();
+      await activePlayerRef.current?.unloadAsync?.();
     } catch {}
     activePlayerRef.current = null;
 
     try {
-      const Audio = lazyAudio();
-      if (!Audio?.createAudioPlayer) {
+      const av = lazyAudio();
+      if (!av?.Audio?.Sound) {
         Alert.alert(
           "Audio no disponible",
           "El módulo de audio no se pudo cargar en este dispositivo.",
         );
         return;
       }
-      const p = Audio.createAudioPlayer({ uri: tone.uri });
-      activePlayerRef.current = p;
-      try { p.seekTo(0); } catch {}
-      try { p.play(); } catch {}
-      setTimeout(() => {
-        try { p.pause(); p.remove?.(); } catch {}
-        if (activePlayerRef.current === p) activePlayerRef.current = null;
+      const { sound } = await av.Audio.Sound.createAsync(
+        { uri: tone.uri },
+        { shouldPlay: true, volume: 1.0 },
+      );
+      activePlayerRef.current = sound;
+      setTimeout(async () => {
+        try {
+          await sound.stopAsync();
+          await sound.unloadAsync();
+        } catch {}
+        if (activePlayerRef.current === sound) activePlayerRef.current = null;
       }, 2200);
     } catch (e: any) {
       Alert.alert("No se pudo reproducir", e?.message || "Error desconocido");
