@@ -15,6 +15,7 @@ import * as DocumentPicker from "expo-document-picker";
 import * as FileSystem from "expo-file-system/legacy";
 import { useAudioPlayer } from "expo-audio";
 
+import { ensureToneChannel } from "@/src/utils/notify";
 import {
   useTheme,
   ThemeColors,
@@ -211,6 +212,11 @@ function TonePicker({
         // fallback to original URI if copy fails (still usable while session lasts)
       }
       onChange({ uri: finalUri, name: asset.name || name });
+      // Recreate Android notification channel pointing to the new sound URI
+      // so the system plays it when an aviso fires (even in background).
+      try {
+        await ensureToneChannel(finalUri, asset.name || name);
+      } catch {}
       setPicking(false);
     } catch (e: any) {
       setPicking(false);
@@ -218,8 +224,11 @@ function TonePicker({
     }
   };
 
-  const clearTone = () => {
+  const clearTone = async () => {
     onChange({ uri: null, name: "Sonido del sistema" });
+    try {
+      await ensureToneChannel(null, "");
+    } catch {}
   };
 
   return (
