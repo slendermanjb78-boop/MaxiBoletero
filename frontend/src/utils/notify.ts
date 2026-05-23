@@ -1,54 +1,86 @@
 import * as Notifications from "expo-notifications";
 import { Platform } from "react-native";
-import * as FileSystem from "expo-file-system/legacy";
 import { storage } from "@/src/utils/storage";
+
+// Lazy-load expo-file-system so a missing/legacy import path doesn't crash
+// the entire JS bundle at module load on Android builds.
+let _FS: any = null;
+const FS = (): any => {
+  if (_FS) return _FS;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    _FS = require("expo-file-system/legacy");
+  } catch {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      _FS = require("expo-file-system");
+    } catch {
+      _FS = {};
+    }
+  }
+  return _FS;
+};
 
 let configured = false;
 const TONE_KEY = "erp_notification_tone_v1";
 const CHANNEL_ID_KEY = "erp_notification_channel_v1";
 const DEFAULT_CHANNEL_ID = "cobros";
 
-// ---------- Helpers ----------
+// ---------- Helpers (all defensive) ----------
 const readTone = async (): Promise<{ uri: string | null; name: string }> => {
-  const raw = await storage.getItem<string>(TONE_KEY, "");
-  if (!raw) return { uri: null, name: "Sonido del sistema" };
+  const fallback = { uri: null, name: "Sonido del sistema" };
   try {
+    const raw = await storage.getItem<string>(TONE_KEY, "");
+    if (!raw) return fallback;
     const parsed = JSON.parse(raw);
-    if (parsed && typeof parsed === "object") return parsed;
+    if (parsed && typeof parsed === "object" && typeof parsed.name === "string") {
+      return { uri: parsed.uri || null, name: parsed.name };
+    }
   } catch {}
-  return { uri: null, name: "Sonido del sistema" };
+  return fallback;
 };
 
 const getStoredChannelId = async (): Promise<string> => {
-  const saved = await storage.getItem<string>(CHANNEL_ID_KEY, "");
-  return saved || DEFAULT_CHANNEL_ID;
+  try {
+    const saved = await storage.getItem<string>(CHANNEL_ID_KEY, "");
+    return saved || DEFAULT_CHANNEL_ID;
+  } catch {
+    return DEFAULT_CHANNEL_ID;
+  }
 };
 
 const setStoredChannelId = async (id: string) => {
-  await storage.setItem(CHANNEL_ID_KEY, id);
+  try {
+    await storage.setItem(CHANNEL_ID_KEY, id);
+  } catch {}
 };
 
 const fileExists = async (uri: string | null): Promise<boolean> => {
   if (!uri) return false;
   try {
-    const info = await FileSystem.getInfoAsync(uri);
-    return !!info.exists;
+    const fs = FS();
+    if (!fs.getInfoAsync) return false;
+    const info = await fs.getInfoAsync(uri);
+    return !!info?.exists;
   } catch {
     return false;
   }
 };
 
 const sanitizeId = (s: string) =>
-  s.replace(/\.[^.]+$/, "").replace(/[^a-zA-Z0-9_]/g, "_").slice(0, 24) || "tono";
+  (s || "").replace(/\.[^.]+$/, "").replace(/[^a-zA-Z0-9_]/g, "_").slice(0, 24) ||
+  "tono";
 
 const ensureDefaultChannel = async () => {
   if (Platform.OS !== "android") return;
-  await Notifications.setNotificationChannelAsync(DEFAULT_CHANNEL_ID, {
-    name: "Avisos de Cobro",
-    importance: Notifications.AndroidImportance.HIGH,
-    vibrationPattern: [0, 250, 250, 250],
-    lightColor: "#1e5a91",
-  });
+  try {
+    await Notifications.setNotificationChannelAsync(DEFAULT_CHANNEL_ID, {
+      name: "Avisos de Cobro",
+      importance: Notifications.AndroidImportance.HIGH,
+      vibrationPattern: [0, 250, 250, 250],
+      lightColor: "#1e5a91",
+    });
+  } catch {}
 };
 
 // ---------- Public API ----------
@@ -123,25 +155,26 @@ export const ensureToneChannel = async (
 
 const configure = async () => {
   if (configured) return;
-  Notifications.setNotificationHandler({
-    handleNotification: async () => ({
-      shouldShowAlert: true,
-      shouldPlaySound: true,
-      shouldSetBadge: false,
-      shouldShowBanner: true,
-      shouldShowList: true,
-    }),
-  });
+  try {
+    Notifications.setNotificationHandler({
+      handleNotification: async () => ({
+        shouldShowAlert: true,
+        shouldPlaySound: true,
+        shouldSetBadge: false,
+        shouldShowBanner: true,
+        shouldShowList: true,
+      }),
+    });
+  } catch {}
 
   if (Platform.OS === "android") {
     await ensureDefaultChannel();
-    // Recreate the saved custom channel after app restart (so the sound URI
-    // is registered in the system again — safe even if the file vanished:
-    // it will fall back to default).
-    const tone = await readTone();
-    if (tone.uri) {
-      await ensureToneChannel(tone.uri, tone.name);
-    }
+    try {
+      const tone = await readTone();
+      if (tone.uri) {
+        await ensureToneChannel(tone.uri, tone.name);
+      }
+    } catch {}
   }
   configured = true;
 };

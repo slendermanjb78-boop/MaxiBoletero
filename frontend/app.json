@@ -30,7 +30,9 @@
         "android.permission.POST_NOTIFICATIONS",
         "android.permission.SCHEDULE_EXACT_ALARM",
         "android.permission.VIBRATE",
-        "android.permission.WAKE_LOCK"
+        "android.permission.WAKE_LOCK",
+        "android.permission.RECEIVE_BOOT_COMPLETED",
+        "android.permission.ACCESS_NOTIFICATION_POLICY"
       ]
     },
     "web": {
@@ -72,7 +74,12 @@
         }
       ],
       "@react-native-community/datetimepicker",
-      "expo-audio"
+      [
+        "expo-audio",
+        {
+          "microphonePermission": false
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

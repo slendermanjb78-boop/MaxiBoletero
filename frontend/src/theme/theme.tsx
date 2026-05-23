@@ -245,20 +245,28 @@ export const ThemeProvider = ({ children }: { children: React.ReactNode }) => {
 
   useEffect(() => {
     (async () => {
-      const savedMode = await storage.getItem<string>(STORAGE_KEY, "");
-      if (savedMode === "dark" || savedMode === "light") setModeState(savedMode);
-      const savedAccent = await storage.getItem<string>(ACCENT_KEY, "");
-      if (savedAccent && /^#[0-9a-fA-F]{6}$/.test(savedAccent)) {
-        setAccentState(savedAccent);
-      } else {
-        setAccentState(savedMode === "dark" ? DEFAULT_ACCENT_DARK : DEFAULT_ACCENT_LIGHT);
-      }
-      const savedTone = await storage.getItem<string>(TONE_KEY, "");
-      if (savedTone) {
-        try {
-          const parsed = JSON.parse(savedTone) as NotificationTone;
-          if (parsed && typeof parsed === "object") setToneState(parsed);
-        } catch {}
+      try {
+        const savedMode = await storage.getItem<string>(STORAGE_KEY, "");
+        if (savedMode === "dark" || savedMode === "light") setModeState(savedMode);
+        const savedAccent = await storage.getItem<string>(ACCENT_KEY, "");
+        if (savedAccent && /^#[0-9a-fA-F]{6}$/.test(savedAccent)) {
+          setAccentState(savedAccent);
+        } else {
+          setAccentState(savedMode === "dark" ? DEFAULT_ACCENT_DARK : DEFAULT_ACCENT_LIGHT);
+        }
+        const savedTone = await storage.getItem<string>(TONE_KEY, "");
+        if (savedTone) {
+          try {
+            const parsed = JSON.parse(savedTone) as NotificationTone;
+            if (parsed && typeof parsed === "object" && typeof parsed.name === "string") {
+              setToneState({ uri: parsed.uri || null, name: parsed.name });
+            }
+          } catch {
+            // malformed value → keep default tone, do not crash
+          }
+        }
+      } catch {
+        // any storage failure → keep all defaults, app must still mount
       }
     })();
   }, []);

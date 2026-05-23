@@ -13,7 +13,7 @@ import Slider from "@react-native-community/slider";
 import { MaterialCommunityIcons, Feather } from "@expo/vector-icons";
 import * as DocumentPicker from "expo-document-picker";
 import * as FileSystem from "expo-file-system/legacy";
-import { useAudioPlayer } from "expo-audio";
+import { createAudioPlayer } from "expo-audio";
 
 import { ensureToneChannel } from "@/src/utils/notify";
 import {
@@ -159,9 +159,21 @@ function TonePicker({
   onChange: (t: NotificationTone) => void;
 }) {
   const [picking, setPicking] = useState(false);
+  // Imperative audio player — created/destroyed ONLY when the user taps play.
+  // We deliberately avoid `useAudioPlayer(null)` because some Android builds
+  // can crash at mount when the source is null/undefined.
+  const activePlayerRef = useRef<any>(null);
 
-  // Audio player for preview (only created when there's a uri)
-  const player = useAudioPlayer(tone.uri ? { uri: tone.uri } : null);
+  // Make sure we stop & free any leftover player on unmount.
+  useEffect(() => {
+    return () => {
+      try {
+        activePlayerRef.current?.pause?.();
+        activePlayerRef.current?.remove?.();
+      } catch {}
+      activePlayerRef.current = null;
+    };
+  }, []);
 
   const playPreview = useCallback(async () => {
     if (!tone.uri) {
@@ -171,19 +183,26 @@ function TonePicker({
       );
       return;
     }
+    // Tear down any previous player first
     try {
-      player.seekTo(0);
-      player.play();
-      // Stop after ~2s to keep it a "sample"
+      activePlayerRef.current?.pause?.();
+      activePlayerRef.current?.remove?.();
+    } catch {}
+    activePlayerRef.current = null;
+
+    try {
+      const p = createAudioPlayer({ uri: tone.uri });
+      activePlayerRef.current = p;
+      try { p.seekTo(0); } catch {}
+      p.play();
       setTimeout(() => {
-        try {
-          player.pause();
-        } catch {}
+        try { p.pause(); p.remove?.(); } catch {}
+        if (activePlayerRef.current === p) activePlayerRef.current = null;
       }, 2200);
     } catch (e: any) {
       Alert.alert("No se pudo reproducir", e?.message || "Error desconocido");
     }
-  }, [player, tone.uri]);
+  }, [tone.uri]);
 
   const pickFile = async () => {
     try {
